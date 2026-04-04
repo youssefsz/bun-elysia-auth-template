@@ -150,7 +150,7 @@ Issues and pull requests are welcome. If you use this template in your own proje
 
 ## Author
 
-Created and maintained by [Youssef Dhibi](https://github.com/youssefsz).
+Created and maintained by [Youssef Dhibi](https://dhibi.tn).
 
 GitHub: [@youssefsz](https://github.com/youssefsz)
 
