@@ -1,4 +1,4 @@
-import type { AuthProviderName } from "../../domains/auth/auth.types";
+import type { ExternalAuthProviderName } from "../../domains/auth/auth.types";
 import { AppError } from "../../utils/app-error";
 
 export interface ExternalAuthIdentity {
@@ -10,17 +10,17 @@ export interface ExternalAuthIdentity {
 
 export interface AuthIdentityVerifier {
   isEnabled(): boolean;
-  provider: AuthProviderName;
+  provider: ExternalAuthProviderName;
   verify(credential: string): Promise<ExternalAuthIdentity>;
 }
 
 export interface AvailableAuthProvider {
   enabled: boolean;
-  provider: AuthProviderName;
+  provider: ExternalAuthProviderName;
 }
 
 export class AuthProviderRegistry {
-  private readonly verifiers: Map<AuthProviderName, AuthIdentityVerifier>;
+  private readonly verifiers: Map<ExternalAuthProviderName, AuthIdentityVerifier>;
 
   constructor(verifiers: AuthIdentityVerifier[]) {
     this.verifiers = new Map(
@@ -36,7 +36,7 @@ export class AuthProviderRegistry {
   }
 
   async verify(
-    provider: AuthProviderName,
+    provider: ExternalAuthProviderName,
     credential: string,
   ): Promise<ExternalAuthIdentity> {
     const verifier = this.verifiers.get(provider);

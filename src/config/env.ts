@@ -59,6 +59,7 @@ const parseCsv = (value: string | undefined, fallback: string[]) => {
 export interface AppConfig {
   allowedCorsOrigins: string[];
   databaseUrl?: string;
+  emailVerificationTtlSeconds: number;
   envName: string;
   googleClientId?: string;
   isProduction: boolean;
@@ -66,6 +67,9 @@ export interface AppConfig {
   port: number;
   rateLimitAccountPerMinute: number;
   rateLimitAuthPerMinute: number;
+  resendApiKey?: string;
+  resendFromEmail?: string;
+  resendFromName?: string;
   sessionCookieName: string;
   sessionCookieSameSite: "lax" | "strict" | "none";
   sessionIssuer: string;
@@ -81,6 +85,10 @@ export const loadConfig = (): AppConfig => {
   return {
     allowedCorsOrigins: parseCsv(Bun.env.CORS_ORIGINS, ["*"]),
     databaseUrl: Bun.env.DATABASE_URL,
+    emailVerificationTtlSeconds: parseNumber(
+      Bun.env.EMAIL_VERIFICATION_TTL_SECONDS,
+      60 * 60 * 24,
+    ),
     envName,
     googleClientId: Bun.env.GOOGLE_CLIENT_ID,
     isProduction,
@@ -94,6 +102,9 @@ export const loadConfig = (): AppConfig => {
       60,
     ),
     rateLimitAuthPerMinute: parseNumber(Bun.env.RATE_LIMIT_AUTH_PER_MINUTE, 10),
+    resendApiKey: Bun.env.RESEND_API_KEY,
+    resendFromEmail: Bun.env.RESEND_FROM_EMAIL,
+    resendFromName: Bun.env.RESEND_FROM_NAME,
     sessionCookieName: Bun.env.SESSION_COOKIE_NAME ?? "auth_template_session",
     sessionCookieSameSite: parseCookieSameSite(
       Bun.env.SESSION_COOKIE_SAME_SITE,

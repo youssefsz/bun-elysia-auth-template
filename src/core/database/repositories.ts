@@ -1,11 +1,24 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { authProvidersTable, usersTable } from "../../db/schema";
+import {
+  authProvidersTable,
+  emailVerificationTokensTable,
+  localAuthCredentialsTable,
+  usersTable,
+} from "../../db/schema";
 import type {
   AuthProvider,
-  AuthProviderRepository,
   AuthProviderName,
+  AuthProviderRepository,
   CreateAuthProviderInput,
+  CreateEmailVerificationTokenInput,
+  CreateLocalAuthCredentialInput,
+  EmailVerificationToken,
+  EmailVerificationTokenKind,
+  EmailVerificationTokenRepository,
+  LocalAuthCredential,
+  LocalAuthCredentialRepository,
+  UpdateLocalAuthCredentialInput,
 } from "../../domains/auth/auth.types";
 import type {
   CreateUserInput,
@@ -36,6 +49,31 @@ const mapAuthProvider = (
   id: row.id,
   provider: row.provider as AuthProviderName,
   providerUserId: row.providerUserId,
+  userId: row.userId,
+});
+
+const mapLocalAuthCredential = (
+  row: typeof localAuthCredentialsTable.$inferSelect,
+): LocalAuthCredential => ({
+  createdAt: row.createdAt,
+  emailVerifiedAt: row.emailVerifiedAt,
+  passwordHash: row.passwordHash,
+  updatedAt: row.updatedAt,
+  userId: row.userId,
+});
+
+const mapEmailVerificationToken = (
+  row: typeof emailVerificationTokensTable.$inferSelect,
+): EmailVerificationToken => ({
+  consumedAt: row.consumedAt,
+  createdAt: row.createdAt,
+  email: row.email,
+  expiresAt: row.expiresAt,
+  id: row.id,
+  kind: row.kind as EmailVerificationTokenKind,
+  pendingName: row.pendingName,
+  pendingPasswordHash: row.pendingPasswordHash,
+  tokenHash: row.tokenHash,
   userId: row.userId,
 });
 
@@ -157,6 +195,20 @@ class DrizzleAuthProviderRepository implements AuthProviderRepository {
     return row ? mapAuthProvider(row) : null;
   }
 
+  async findByUserIdAndProvider(
+    userId: string,
+    provider: AuthProviderName,
+  ): Promise<AuthProvider | null> {
+    const row = await this.db.query.authProvidersTable.findFirst({
+      where: and(
+        eq(authProvidersTable.userId, userId),
+        eq(authProvidersTable.provider, provider),
+      ),
+    });
+
+    return row ? mapAuthProvider(row) : null;
+  }
+
   async listByUserId(userId: string): Promise<AuthProvider[]> {
     const rows = await this.db.query.authProvidersTable.findMany({
       orderBy: (table, { asc }) => asc(table.createdAt),
@@ -164,6 +216,167 @@ class DrizzleAuthProviderRepository implements AuthProviderRepository {
     });
 
     return rows.map(mapAuthProvider);
+  }
+}
+
+class DrizzleLocalAuthCredentialRepository
+  implements LocalAuthCredentialRepository
+{
+  constructor(private readonly db: Database) {}
+
+  async create(
+    input: CreateLocalAuthCredentialInput,
+  ): Promise<LocalAuthCredential> {
+    const [row] = await this.db
+      .insert(localAuthCredentialsTable)
+      .values({
+        emailVerifiedAt: input.emailVerifiedAt ?? null,
+        passwordHash: input.passwordHash,
+        userId: input.userId,
+      })
+      .returning();
+
+    return mapLocalAuthCredential(row);
+  }
+
+  async deleteByUserId(userId: string): Promise<boolean> {
+    const rows = await this.db
+      .delete(localAuthCredentialsTable)
+      .where(eq(localAuthCredentialsTable.userId, userId))
+      .returning({ userId: localAuthCredentialsTable.userId });
+
+    return rows.length > 0;
+  }
+
+  async findByUserId(userId: string): Promise<LocalAuthCredential | null> {
+    const row = await this.db.query.localAuthCredentialsTable.findFirst({
+      where: eq(localAuthCredentialsTable.userId, userId),
+    });
+
+    return row ? mapLocalAuthCredential(row) : null;
+  }
+
+  async update(
+    userId: string,
+    input: UpdateLocalAuthCredentialInput,
+  ): Promise<LocalAuthCredential | null> {
+    const [row] = await this.db
+      .update(localAuthCredentialsTable)
+      .set({
+        emailVerifiedAt: input.emailVerifiedAt,
+        passwordHash: input.passwordHash,
+        updatedAt: new Date(),
+      })
+      .where(eq(localAuthCredentialsTable.userId, userId))
+      .returning();
+
+    return row ? mapLocalAuthCredential(row) : null;
+  }
+}
+
+class DrizzleEmailVerificationTokenRepository
+  implements EmailVerificationTokenRepository
+{
+  constructor(private readonly db: Database) {}
+
+  async consume(id: string, consumedAt: Date) {
+    const [row] = await this.db
+      .update(emailVerificationTokensTable)
+      .set({
+        consumedAt,
+      })
+      .where(eq(emailVerificationTokensTable.id, id))
+      .returning();
+
+    return row ? mapEmailVerificationToken(row) : null;
+  }
+
+  async create(
+    input: CreateEmailVerificationTokenInput,
+  ): Promise<EmailVerificationToken> {
+    const [row] = await this.db
+      .insert(emailVerificationTokensTable)
+      .values({
+        email: input.email,
+        expiresAt: input.expiresAt,
+        id: createId("verify"),
+        kind: input.kind,
+        pendingName: input.pendingName ?? null,
+        pendingPasswordHash: input.pendingPasswordHash,
+        tokenHash: input.tokenHash,
+        userId: input.userId ?? null,
+      })
+      .returning();
+
+    return mapEmailVerificationToken(row);
+  }
+
+  async deleteById(id: string): Promise<boolean> {
+    const rows = await this.db
+      .delete(emailVerificationTokensTable)
+      .where(eq(emailVerificationTokensTable.id, id))
+      .returning({ id: emailVerificationTokensTable.id });
+
+    return rows.length > 0;
+  }
+
+  async deleteByUserId(userId: string): Promise<number> {
+    const rows = await this.db
+      .delete(emailVerificationTokensTable)
+      .where(eq(emailVerificationTokensTable.userId, userId))
+      .returning({ id: emailVerificationTokensTable.id });
+
+    return rows.length;
+  }
+
+  async deletePendingByEmail(email: string, kind: EmailVerificationTokenKind) {
+    const rows = await this.db
+      .delete(emailVerificationTokensTable)
+      .where(
+        and(
+          eq(emailVerificationTokensTable.email, email),
+          eq(emailVerificationTokensTable.kind, kind),
+          isNull(emailVerificationTokensTable.consumedAt),
+        ),
+      )
+      .returning({ id: emailVerificationTokensTable.id });
+
+    return rows.length;
+  }
+
+  async findLatestPendingByEmail(
+    email: string,
+    kind: EmailVerificationTokenKind,
+    now: Date,
+  ) {
+    const row = await this.db.query.emailVerificationTokensTable.findFirst({
+      orderBy: [desc(emailVerificationTokensTable.createdAt)],
+      where: and(
+        eq(emailVerificationTokensTable.email, email),
+        eq(emailVerificationTokensTable.kind, kind),
+        isNull(emailVerificationTokensTable.consumedAt),
+        gt(emailVerificationTokensTable.expiresAt, now),
+      ),
+    });
+
+    return row ? mapEmailVerificationToken(row) : null;
+  }
+
+  async findValidByTokenHash(
+    tokenHash: string,
+    kind: EmailVerificationTokenKind,
+    now: Date,
+  ) {
+    const row = await this.db.query.emailVerificationTokensTable.findFirst({
+      where: and(
+        eq(emailVerificationTokensTable.tokenHash, tokenHash),
+        eq(emailVerificationTokensTable.kind, kind),
+        isNull(emailVerificationTokensTable.consumedAt),
+        gt(emailVerificationTokensTable.expiresAt, now),
+      ),
+    });
+
+    return row ? mapEmailVerificationToken(row) : null;
   }
 }
 
@@ -289,6 +502,19 @@ class InMemoryAuthProviderRepository implements AuthProviderRepository {
     return null;
   }
 
+  async findByUserIdAndProvider(
+    userId: string,
+    provider: AuthProviderName,
+  ): Promise<AuthProvider | null> {
+    for (const authProvider of this.store.values()) {
+      if (authProvider.userId === userId && authProvider.provider === provider) {
+        return authProvider;
+      }
+    }
+
+    return null;
+  }
+
   async listByUserId(userId: string): Promise<AuthProvider[]> {
     return [...this.store.values()]
       .filter((provider) => provider.userId === userId)
@@ -296,10 +522,185 @@ class InMemoryAuthProviderRepository implements AuthProviderRepository {
   }
 }
 
+class InMemoryLocalAuthCredentialRepository
+  implements LocalAuthCredentialRepository
+{
+  constructor(
+    private readonly store = new Map<string, LocalAuthCredential>(),
+  ) {}
+
+  async create(
+    input: CreateLocalAuthCredentialInput,
+  ): Promise<LocalAuthCredential> {
+    const now = new Date();
+    const credential: LocalAuthCredential = {
+      createdAt: now,
+      emailVerifiedAt: input.emailVerifiedAt ?? null,
+      passwordHash: input.passwordHash,
+      updatedAt: now,
+      userId: input.userId,
+    };
+
+    this.store.set(credential.userId, credential);
+
+    return credential;
+  }
+
+  async deleteByUserId(userId: string): Promise<boolean> {
+    return this.store.delete(userId);
+  }
+
+  async findByUserId(userId: string): Promise<LocalAuthCredential | null> {
+    return this.store.get(userId) ?? null;
+  }
+
+  async update(
+    userId: string,
+    input: UpdateLocalAuthCredentialInput,
+  ): Promise<LocalAuthCredential | null> {
+    const current = this.store.get(userId);
+
+    if (!current) {
+      return null;
+    }
+
+    const next: LocalAuthCredential = {
+      ...current,
+      emailVerifiedAt: input.emailVerifiedAt ?? current.emailVerifiedAt,
+      passwordHash: input.passwordHash ?? current.passwordHash,
+      updatedAt: new Date(),
+    };
+
+    this.store.set(userId, next);
+
+    return next;
+  }
+}
+
+class InMemoryEmailVerificationTokenRepository
+  implements EmailVerificationTokenRepository
+{
+  constructor(
+    private readonly store = new Map<string, EmailVerificationToken>(),
+  ) {}
+
+  async consume(id: string, consumedAt: Date) {
+    const current = this.store.get(id);
+
+    if (!current) {
+      return null;
+    }
+
+    const next: EmailVerificationToken = {
+      ...current,
+      consumedAt,
+    };
+
+    this.store.set(id, next);
+
+    return next;
+  }
+
+  async create(
+    input: CreateEmailVerificationTokenInput,
+  ): Promise<EmailVerificationToken> {
+    const token: EmailVerificationToken = {
+      consumedAt: null,
+      createdAt: new Date(),
+      email: input.email,
+      expiresAt: input.expiresAt,
+      id: createId("verify"),
+      kind: input.kind,
+      pendingName: input.pendingName ?? null,
+      pendingPasswordHash: input.pendingPasswordHash,
+      tokenHash: input.tokenHash,
+      userId: input.userId ?? null,
+    };
+
+    this.store.set(token.id, token);
+
+    return token;
+  }
+
+  async deleteById(id: string): Promise<boolean> {
+    return this.store.delete(id);
+  }
+
+  async deleteByUserId(userId: string): Promise<number> {
+    const ids = [...this.store.values()]
+      .filter((token) => token.userId === userId)
+      .map((token) => token.id);
+
+    for (const id of ids) {
+      this.store.delete(id);
+    }
+
+    return ids.length;
+  }
+
+  async deletePendingByEmail(email: string, kind: EmailVerificationTokenKind) {
+    const ids = [...this.store.values()]
+      .filter(
+        (token) =>
+          token.email === email &&
+          token.kind === kind &&
+          token.consumedAt === null,
+      )
+      .map((token) => token.id);
+
+    for (const id of ids) {
+      this.store.delete(id);
+    }
+
+    return ids.length;
+  }
+
+  async findLatestPendingByEmail(
+    email: string,
+    kind: EmailVerificationTokenKind,
+    now: Date,
+  ) {
+    return (
+      [...this.store.values()]
+        .filter(
+          (token) =>
+            token.email === email &&
+            token.kind === kind &&
+            token.consumedAt === null &&
+            token.expiresAt.getTime() > now.getTime(),
+        )
+        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0] ??
+      null
+    );
+  }
+
+  async findValidByTokenHash(
+    tokenHash: string,
+    kind: EmailVerificationTokenKind,
+    now: Date,
+  ) {
+    for (const token of this.store.values()) {
+      if (
+        token.tokenHash === tokenHash &&
+        token.kind === kind &&
+        token.consumedAt === null &&
+        token.expiresAt.getTime() > now.getTime()
+      ) {
+        return token;
+      }
+    }
+
+    return null;
+  }
+}
+
 export const createRepositories = (db: Database | null, logger: Logger) => {
   if (db) {
     return {
       authProviderRepository: new DrizzleAuthProviderRepository(db),
+      emailVerificationTokenRepository:
+        new DrizzleEmailVerificationTokenRepository(db),
+      localAuthCredentialRepository: new DrizzleLocalAuthCredentialRepository(db),
       userRepository: new DrizzleUserRepository(db),
     };
   }
@@ -308,6 +709,9 @@ export const createRepositories = (db: Database | null, logger: Logger) => {
 
   return {
     authProviderRepository: new InMemoryAuthProviderRepository(),
+    emailVerificationTokenRepository:
+      new InMemoryEmailVerificationTokenRepository(),
+    localAuthCredentialRepository: new InMemoryLocalAuthCredentialRepository(),
     userRepository: new InMemoryUserRepository(),
   };
 };

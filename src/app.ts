@@ -8,6 +8,8 @@ import { GoogleTokenVerifier } from "./core/auth/google-token-verifier";
 import { SessionService } from "./core/auth/session.service";
 import { createDatabaseClient } from "./core/database/client";
 import { createRepositories } from "./core/database/repositories";
+import type { TransactionalEmailClient } from "./core/email/resend-email-client";
+import { ResendEmailClient } from "./core/email/resend-email-client";
 import { AuthGuard } from "./middleware/auth/auth-guard";
 import { RequestRateLimiter } from "./middleware/security/rate-limiter";
 import { AccountService } from "./services/account-service/account.service";
@@ -80,6 +82,7 @@ const buildPreflightHeaders = ({
 interface CreateAppOptions {
   authProviderRegistry?: AuthProviderRegistry;
   config?: AppConfig;
+  emailClient?: TransactionalEmailClient;
   logger?: Logger;
 }
 
@@ -89,6 +92,7 @@ export const createApp = (options: CreateAppOptions = {}) => {
   const requestTimings = new WeakMap<Request, number>();
   const database = createDatabaseClient(config, logger);
   const repositories = createRepositories(database.db, logger);
+  const emailClient = options.emailClient ?? new ResendEmailClient(config);
   const authProviderRegistry =
     options.authProviderRegistry ??
     new AuthProviderRegistry([new GoogleTokenVerifier(config)]);
@@ -96,12 +100,20 @@ export const createApp = (options: CreateAppOptions = {}) => {
   const authService = new AuthService({
     authProviderRegistry,
     authProviderRepository: repositories.authProviderRepository,
+    config,
+    emailClient,
+    emailVerificationTokenRepository:
+      repositories.emailVerificationTokenRepository,
+    localAuthCredentialRepository: repositories.localAuthCredentialRepository,
     logger,
     sessionService,
     userRepository: repositories.userRepository,
   });
   const accountService = new AccountService({
     authProviderRepository: repositories.authProviderRepository,
+    emailVerificationTokenRepository:
+      repositories.emailVerificationTokenRepository,
+    localAuthCredentialRepository: repositories.localAuthCredentialRepository,
     userRepository: repositories.userRepository,
   });
   const authGuard = new AuthGuard(authService, config.sessionCookieName);
@@ -209,6 +221,11 @@ export const createApp = (options: CreateAppOptions = {}) => {
           "DELETE /api/v1/account",
         ],
         auth: [
+          "POST /api/v1/auth/register",
+          "POST /api/v1/auth/login",
+          "POST /api/v1/auth/verify-email/request",
+          "POST /api/v1/auth/verify-email/confirm",
+          "GET /api/v1/auth/verify-email",
           "POST /api/v1/auth/providers/google",
           "GET /api/v1/auth/providers",
           "GET /api/v1/auth/session",
@@ -249,6 +266,7 @@ export const createApp = (options: CreateAppOptions = {}) => {
     authService,
     config,
     database,
+    emailClient,
     logger,
     rateLimiter,
     repositories,

@@ -14,7 +14,12 @@ Content-Type: application/json
 
 ### Authentication
 
-Authenticated routes use a session cookie set by `POST /api/v1/auth/providers/google`.
+Authenticated routes use a session cookie set by:
+
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/providers/google`
+- `POST /api/v1/auth/verify-email/confirm`
+- `GET /api/v1/auth/verify-email`
 
 Default cookie name:
 
@@ -57,6 +62,69 @@ All handled errors return this shape:
 
 ## Auth
 
+### `POST /api/v1/auth/register`
+
+Creates or refreshes a pending local email/password registration and sends a verification email.
+
+Request body:
+
+```json
+{
+  "email": "user@example.com",
+  "name": "Jane Doe",
+  "password": "strong-password-123"
+}
+```
+
+Success response:
+
+```json
+{
+  "success": true
+}
+```
+
+### `POST /api/v1/auth/login`
+
+Signs in with a verified local email/password account.
+
+Request body:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "strong-password-123"
+}
+```
+
+### `POST /api/v1/auth/verify-email/request`
+
+Resends a pending verification email when a local registration has not been confirmed yet.
+
+Request body:
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+### `POST /api/v1/auth/verify-email/confirm`
+
+Confirms a verification token and signs the user in.
+
+Request body:
+
+```json
+{
+  "token": "verification-token"
+}
+```
+
+### `GET /api/v1/auth/verify-email?token=...`
+
+Browser-friendly verification endpoint that confirms the token and signs the user in.
+
 ### `POST /api/v1/auth/providers/google`
 
 Signs in a user with a Google ID token and sets the session cookie.
@@ -69,24 +137,10 @@ Request body:
 }
 ```
 
-Success response:
-
-```json
-{
-  "user": {
-    "id": "user_...",
-    "email": "user@example.com",
-    "name": "Jane Doe",
-    "emailVerified": true,
-    "createdAt": "2026-03-10T09:00:00.000Z",
-    "updatedAt": "2026-03-10T09:00:00.000Z"
-  }
-}
-```
-
 Possible errors:
 
 - `401 INVALID_GOOGLE_TOKEN`
+- `403 EXTERNAL_EMAIL_NOT_VERIFIED`
 - `503 GOOGLE_AUTH_NOT_CONFIGURED`
 - `400 INVALID_REQUEST`
 
@@ -124,14 +178,22 @@ Returns linked providers and currently available provider metadata for the authe
   "providers": {
     "available": [
       {
+        "provider": "email",
+        "enabled": true
+      },
+      {
         "provider": "google",
         "enabled": true
       }
     ],
     "linked": [
       {
-        "provider": "google",
+        "provider": "email",
         "connectedAt": "2026-03-10T09:00:00.000Z"
+      },
+      {
+        "provider": "google",
+        "connectedAt": "2026-03-11T09:00:00.000Z"
       }
     ]
   }

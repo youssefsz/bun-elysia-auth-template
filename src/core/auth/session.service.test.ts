@@ -5,6 +5,7 @@ describe("SessionService", () => {
   it("signs and verifies session tokens", async () => {
     const service = new SessionService({
       allowedCorsOrigins: ["*"],
+      emailVerificationTtlSeconds: 60 * 60 * 24,
       envName: "test",
       googleClientId: undefined,
       isProduction: false,
@@ -12,6 +13,9 @@ describe("SessionService", () => {
       port: 3000,
       rateLimitAccountPerMinute: 60,
       rateLimitAuthPerMinute: 10,
+      resendApiKey: undefined,
+      resendFromEmail: undefined,
+      resendFromName: undefined,
       sessionCookieName: "session",
       sessionCookieSameSite: "lax",
       sessionIssuer: "test-suite",

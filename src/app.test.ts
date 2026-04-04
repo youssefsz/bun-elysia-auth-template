@@ -4,12 +4,31 @@ import {
   AuthProviderRegistry,
   type AuthIdentityVerifier,
 } from "./core/auth/auth-provider-registry";
+import type {
+  SendEmailInput,
+  TransactionalEmailClient,
+} from "./core/email/resend-email-client";
 
 Bun.env.DATABASE_URL = "";
 Bun.env.CORS_ORIGINS = "http://localhost:5173";
 Bun.env.GOOGLE_CLIENT_ID = "";
 Bun.env.SESSION_COOKIE_NAME = "auth_template_session";
 Bun.env.SESSION_ISSUER = "elysia-auth-template";
+Bun.env.RESEND_API_KEY = "";
+Bun.env.RESEND_FROM_EMAIL = "";
+Bun.env.RESEND_FROM_NAME = "";
+
+class FakeEmailClient implements TransactionalEmailClient {
+  messages: SendEmailInput[] = [];
+
+  isEnabled() {
+    return true;
+  }
+
+  async sendEmail(input: SendEmailInput) {
+    this.messages.push(input);
+  }
+}
 
 const mockGoogleVerifier: AuthIdentityVerifier = {
   isEnabled() {
@@ -24,6 +43,17 @@ const mockGoogleVerifier: AuthIdentityVerifier = {
       providerUserId: "google_owner_123",
     };
   },
+};
+
+const extractVerificationToken = (emailClient: FakeEmailClient, index = 0) => {
+  const text = emailClient.messages[index]?.text ?? "";
+  const match = text.match(/token=([^\s]+)/);
+
+  if (!match) {
+    throw new Error("Verification token not found in email body.");
+  }
+
+  return decodeURIComponent(match[1]);
 };
 
 const createAuthenticatedRequest = async (
@@ -168,6 +198,7 @@ describe("App", () => {
   it("signs in with Google through the provider registry and sets a session cookie", async () => {
     const { app, config } = createApp({
       authProviderRegistry: new AuthProviderRegistry([mockGoogleVerifier]),
+      emailClient: new FakeEmailClient(),
     });
     const response = await app.handle(
       new Request("http://localhost/api/v1/auth/providers/google", {
@@ -189,8 +220,202 @@ describe("App", () => {
     );
   });
 
+  it("registers a local account, sends verification email, and blocks login until verified", async () => {
+    const emailClient = new FakeEmailClient();
+    const { app } = createApp({
+      emailClient,
+    });
+
+    const registerResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    expect(registerResponse.status).toBe(200);
+    expect(await registerResponse.json()).toEqual({
+      success: true,
+    });
+    expect(emailClient.messages).toHaveLength(1);
+
+    const loginResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          password: "password123",
+        }),
+      }),
+    );
+
+    expect(loginResponse.status).toBe(403);
+    expect(await loginResponse.json()).toEqual({
+      error: {
+        code: "EMAIL_NOT_VERIFIED",
+        message: "Verify your email before signing in.",
+      },
+    });
+  });
+
+  it("verifies email from the emailed link and then allows local login", async () => {
+    const emailClient = new FakeEmailClient();
+    const { app, config } = createApp({
+      emailClient,
+    });
+
+    await app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    const token = extractVerificationToken(emailClient);
+    const verifyResponse = await app.handle(
+      new Request(`http://localhost/api/v1/auth/verify-email?token=${token}`),
+    );
+    const verifyBody = await verifyResponse.json();
+
+    expect(verifyResponse.status).toBe(200);
+    expect(verifyBody.user.email).toBe("owner@example.com");
+    expect(verifyResponse.headers.get("set-cookie")).toContain(
+      `${config.sessionCookieName}=`,
+    );
+
+    const loginResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          password: "password123",
+        }),
+      }),
+    );
+    const loginBody = await loginResponse.json();
+
+    expect(loginResponse.status).toBe(200);
+    expect(loginBody.user.email).toBe("owner@example.com");
+  });
+
+  it("resends verification emails for pending registrations", async () => {
+    const emailClient = new FakeEmailClient();
+    const { app } = createApp({
+      emailClient,
+    });
+
+    await app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    const resendResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/request", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+        }),
+      }),
+    );
+
+    expect(resendResponse.status).toBe(200);
+    expect(await resendResponse.json()).toEqual({
+      success: true,
+    });
+    expect(emailClient.messages).toHaveLength(2);
+  });
+
+  it("auto-links Google sign-in to an existing verified local account", async () => {
+    const emailClient = new FakeEmailClient();
+    const instance = createApp({
+      authProviderRegistry: new AuthProviderRegistry([mockGoogleVerifier]),
+      emailClient,
+    });
+
+    await instance.app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    const token = extractVerificationToken(emailClient);
+
+    await instance.app.handle(
+      new Request(`http://localhost/api/v1/auth/verify-email?token=${token}`),
+    );
+
+    const localUser = await instance.repositories.userRepository.findByEmail(
+      "owner@example.com",
+    );
+    const googleResponse = await instance.app.handle(
+      new Request("http://localhost/api/v1/auth/providers/google", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          idToken: "test-id-token",
+        }),
+      }),
+    );
+    const googleBody = await googleResponse.json();
+
+    expect(googleResponse.status).toBe(200);
+    expect(googleBody.user.id).toBe(localUser?.id);
+
+    const providers = await instance.repositories.authProviderRepository.listByUserId(
+      localUser!.id,
+    );
+    expect(providers.map((provider) => provider.provider).sort()).toEqual([
+      "email",
+      "google",
+    ]);
+  });
+
   it("returns an unauthenticated session without a cookie", async () => {
-    const { app } = createApp();
+    const { app } = createApp({
+      emailClient: new FakeEmailClient(),
+    });
     const response = await app.handle(
       new Request("http://localhost/api/v1/auth/session"),
     );
@@ -265,6 +490,10 @@ describe("App", () => {
     expect(response.status).toBe(200);
     expect(body.providers.available).toEqual([
       {
+        enabled: true,
+        provider: "email",
+      },
+      {
         enabled: false,
         provider: "google",
       },
@@ -318,30 +547,65 @@ describe("App", () => {
     });
   });
 
-  it("deletes the authenticated account", async () => {
-    const context = await createAuthenticatedRequest("/api/v1/account", {
-      method: "DELETE",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        confirmEmail: "owner@example.com",
-      }),
+  it("deletes the authenticated account and cascades auth state", async () => {
+    const emailClient = new FakeEmailClient();
+    const instance = createApp({
+      emailClient,
     });
-    const response = await context.app.handle(context.request);
+
+    await instance.app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    const token = extractVerificationToken(emailClient);
+    const verifyResponse = await instance.app.handle(
+      new Request(`http://localhost/api/v1/auth/verify-email?token=${token}`),
+    );
+    const cookie = verifyResponse.headers.get("set-cookie")!;
+    const user = await instance.repositories.userRepository.findByEmail(
+      "owner@example.com",
+    );
+
+    const response = await instance.app.handle(
+      new Request("http://localhost/api/v1/account", {
+        method: "DELETE",
+        headers: {
+          "content-type": "application/json",
+          cookie,
+        },
+        body: JSON.stringify({
+          confirmEmail: "owner@example.com",
+        }),
+      }),
+    );
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       success: true,
     });
-    expect(await context.repositories.userRepository.findById(context.user.id)).toBeNull();
+    expect(await instance.repositories.userRepository.findById(user!.id)).toBeNull();
     expect(
-      await context.repositories.authProviderRepository.listByUserId(context.user.id),
+      await instance.repositories.authProviderRepository.listByUserId(user!.id),
     ).toEqual([]);
+    expect(
+      await instance.repositories.localAuthCredentialRepository.findByUserId(user!.id),
+    ).toBeNull();
   });
 
   it("uses the in-memory repository path when DATABASE_URL is empty", async () => {
-    const instance = createApp();
+    const instance = createApp({
+      emailClient: new FakeEmailClient(),
+    });
 
     expect(instance.database.db).toBeNull();
     expect(instance.database.sql).toBeNull();
