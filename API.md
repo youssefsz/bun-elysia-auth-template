@@ -19,7 +19,6 @@ Authenticated routes use a session cookie set by:
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/providers/google`
 - `POST /api/v1/auth/verify-email/confirm`
-- `GET /api/v1/auth/verify-email`
 
 Default cookie name:
 
@@ -80,7 +79,12 @@ Success response:
 
 ```json
 {
-  "success": true
+  "success": true,
+  "verificationEmail": {
+    "requestedAt": "2026-04-04T09:00:00.000Z",
+    "resendAvailableAt": "2026-04-04T09:01:00.000Z",
+    "retryAfterSeconds": 60
+  }
 }
 ```
 
@@ -101,6 +105,8 @@ Request body:
 
 Resends a pending verification email when a local registration has not been confirmed yet.
 
+The response always keeps the same shape, even when the email does not map to a pending registration, so the frontend can show a countdown without leaking account existence.
+
 Request body:
 
 ```json
@@ -109,9 +115,24 @@ Request body:
 }
 ```
 
+Success response:
+
+```json
+{
+  "success": true,
+  "verificationEmail": {
+    "requestedAt": "2026-04-04T09:00:00.000Z",
+    "resendAvailableAt": "2026-04-04T09:01:00.000Z",
+    "retryAfterSeconds": 60
+  }
+}
+```
+
 ### `POST /api/v1/auth/verify-email/confirm`
 
 Confirms a verification token and signs the user in.
+
+This is the endpoint your frontend should call after the user lands on the frontend verification page from the email link.
 
 Request body:
 
@@ -121,9 +142,79 @@ Request body:
 }
 ```
 
+Success responses:
+
+```json
+{
+  "status": "verified",
+  "user": {
+    "id": "user_...",
+    "email": "user@example.com",
+    "name": "Jane Doe",
+    "emailVerified": true,
+    "createdAt": "2026-03-10T09:00:00.000Z",
+    "updatedAt": "2026-03-10T09:00:00.000Z"
+  }
+}
+```
+
+```json
+{
+  "status": "already_verified"
+}
+```
+
 ### `GET /api/v1/auth/verify-email?token=...`
 
-Browser-friendly verification endpoint that confirms the token and signs the user in.
+Compatibility endpoint. When `FRONTEND_PUBLIC_URL` is configured, it redirects the browser to the frontend verification route with the same `token` query param. Otherwise it verifies the token directly and signs the user in.
+
+### `POST /api/v1/auth/password-reset/request`
+
+Requests a password reset email for a verified local account.
+
+The response keeps the same shape even when the email does not map to an account, so the frontend can show countdown UX without leaking account existence.
+
+Request body:
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+Success response:
+
+```json
+{
+  "success": true,
+  "passwordResetEmail": {
+    "requestedAt": "2026-04-04T09:00:00.000Z",
+    "resendAvailableAt": "2026-04-04T09:01:00.000Z",
+    "retryAfterSeconds": 60
+  }
+}
+```
+
+### `POST /api/v1/auth/password-reset/confirm`
+
+Consumes a password reset token, updates the password, and invalidates existing sessions.
+
+Request body:
+
+```json
+{
+  "token": "reset-token",
+  "password": "new-strong-password-123"
+}
+```
+
+Success response:
+
+```json
+{
+  "success": true
+}
+```
 
 ### `POST /api/v1/auth/providers/google`
 

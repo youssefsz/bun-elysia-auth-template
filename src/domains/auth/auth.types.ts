@@ -1,10 +1,12 @@
 export const supportedAuthProviders = ["email", "google"] as const;
 export const supportedExternalAuthProviders = ["google"] as const;
+export const authEmailDeliveryKinds = ["verification", "password_reset"] as const;
 export const emailVerificationTokenKinds = ["email_verification"] as const;
 
 export type AuthProviderName = (typeof supportedAuthProviders)[number];
 export type ExternalAuthProviderName =
   (typeof supportedExternalAuthProviders)[number];
+export type AuthEmailDeliveryKind = (typeof authEmailDeliveryKinds)[number];
 export type EmailVerificationTokenKind =
   (typeof emailVerificationTokenKinds)[number];
 
@@ -99,14 +101,70 @@ export interface EmailVerificationTokenRepository {
     email: string,
     kind: EmailVerificationTokenKind,
   ): Promise<number>;
+  findByTokenHash(
+    tokenHash: string,
+    kind: EmailVerificationTokenKind,
+  ): Promise<EmailVerificationToken | null>;
   findLatestPendingByEmail(
     email: string,
     kind: EmailVerificationTokenKind,
     now: Date,
   ): Promise<EmailVerificationToken | null>;
-  findValidByTokenHash(
-    tokenHash: string,
-    kind: EmailVerificationTokenKind,
-    now: Date,
-  ): Promise<EmailVerificationToken | null>;
+}
+
+export interface PasswordResetToken {
+  consumedAt: Date | null;
+  createdAt: Date;
+  expiresAt: Date;
+  id: string;
+  tokenHash: string;
+  userId: string;
+}
+
+export interface CreatePasswordResetTokenInput {
+  expiresAt: Date;
+  tokenHash: string;
+  userId: string;
+}
+
+export interface PasswordResetTokenRepository {
+  consume(id: string, consumedAt: Date): Promise<PasswordResetToken | null>;
+  create(input: CreatePasswordResetTokenInput): Promise<PasswordResetToken>;
+  deleteById(id: string): Promise<boolean>;
+  deleteByUserId(userId: string): Promise<number>;
+  deletePendingByUserId(userId: string): Promise<number>;
+  findByTokenHash(tokenHash: string): Promise<PasswordResetToken | null>;
+}
+
+export interface AuthEmailDelivery {
+  createdAt: Date;
+  email: string;
+  id: string;
+  kind: AuthEmailDeliveryKind;
+}
+
+export interface CreateAuthEmailDeliveryInput {
+  createdAt?: Date;
+  email: string;
+  kind: AuthEmailDeliveryKind;
+}
+
+export interface AuthEmailDeliveryRateLimitState {
+  dailyCount: number;
+  hourlyCount: number;
+  latestRequestedAt: Date | null;
+  oldestDailyRequestedAt: Date | null;
+  oldestHourlyRequestedAt: Date | null;
+}
+
+export interface AuthEmailDeliveryRepository {
+  create(input: CreateAuthEmailDeliveryInput): Promise<AuthEmailDelivery>;
+  deleteByEmail(email: string): Promise<number>;
+  deleteById(id: string): Promise<boolean>;
+  getRateLimitState(
+    email: string,
+    kind: AuthEmailDeliveryKind,
+    hourlyWindowStart: Date,
+    dailyWindowStart: Date,
+  ): Promise<AuthEmailDeliveryRateLimitState>;
 }

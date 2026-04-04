@@ -12,6 +12,8 @@ import type {
 Bun.env.DATABASE_URL = "";
 Bun.env.CORS_ORIGINS = "http://localhost:5173";
 Bun.env.GOOGLE_CLIENT_ID = "";
+Bun.env.APP_PUBLIC_URL = "https://api.example.com";
+Bun.env.FRONTEND_PUBLIC_URL = "https://app.example.com";
 Bun.env.SESSION_COOKIE_NAME = "auth_template_session";
 Bun.env.SESSION_ISSUER = "elysia-auth-template";
 Bun.env.RESEND_API_KEY = "";
@@ -54,6 +56,42 @@ const extractVerificationToken = (emailClient: FakeEmailClient, index = 0) => {
   }
 
   return decodeURIComponent(match[1]);
+};
+
+const expectVerificationEmailResponse = (
+  body: unknown,
+  minimumRetryAfterSeconds = 1,
+) => {
+  expect(body).toEqual({
+    success: true,
+    verificationEmail: {
+      requestedAt: expect.any(String),
+      resendAvailableAt: expect.any(String),
+      retryAfterSeconds: expect.any(Number),
+    },
+  });
+  expect(
+    (body as { verificationEmail: { retryAfterSeconds: number } }).verificationEmail
+      .retryAfterSeconds,
+  ).toBeGreaterThanOrEqual(minimumRetryAfterSeconds);
+};
+
+const expectPasswordResetEmailResponse = (
+  body: unknown,
+  minimumRetryAfterSeconds = 1,
+) => {
+  expect(body).toEqual({
+    passwordResetEmail: {
+      requestedAt: expect.any(String),
+      resendAvailableAt: expect.any(String),
+      retryAfterSeconds: expect.any(Number),
+    },
+    success: true,
+  });
+  expect(
+    (body as { passwordResetEmail: { retryAfterSeconds: number } }).passwordResetEmail
+      .retryAfterSeconds,
+  ).toBeGreaterThanOrEqual(minimumRetryAfterSeconds);
 };
 
 const createAuthenticatedRequest = async (
@@ -241,10 +279,11 @@ describe("App", () => {
     );
 
     expect(registerResponse.status).toBe(200);
-    expect(await registerResponse.json()).toEqual({
-      success: true,
-    });
+    expectVerificationEmailResponse(await registerResponse.json());
     expect(emailClient.messages).toHaveLength(1);
+    expect(emailClient.messages[0]?.text).toContain(
+      "https://app.example.com/verify-email?token=",
+    );
 
     const loginResponse = await app.handle(
       new Request("http://localhost/api/v1/auth/login", {
@@ -268,7 +307,7 @@ describe("App", () => {
     });
   });
 
-  it("verifies email from the emailed link and then allows local login", async () => {
+  it("verifies email through the confirm endpoint and then allows local login", async () => {
     const emailClient = new FakeEmailClient();
     const { app, config } = createApp({
       emailClient,
@@ -290,11 +329,20 @@ describe("App", () => {
 
     const token = extractVerificationToken(emailClient);
     const verifyResponse = await app.handle(
-      new Request(`http://localhost/api/v1/auth/verify-email?token=${token}`),
+      new Request("http://localhost/api/v1/auth/verify-email/confirm", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+        }),
+      }),
     );
     const verifyBody = await verifyResponse.json();
 
     expect(verifyResponse.status).toBe(200);
+    expect(verifyBody.status).toBe("verified");
     expect(verifyBody.user.email).toBe("owner@example.com");
     expect(verifyResponse.headers.get("set-cookie")).toContain(
       `${config.sessionCookieName}=`,
@@ -318,7 +366,71 @@ describe("App", () => {
     expect(loginBody.user.email).toBe("owner@example.com");
   });
 
-  it("resends verification emails for pending registrations", async () => {
+  it("redirects backend verification links to the frontend route when configured", async () => {
+    const { app } = createApp();
+    const response = await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email?token=test-token"),
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "https://app.example.com/verify-email?token=test-token",
+    );
+  });
+
+  it("returns already_verified when the same verification token is submitted twice", async () => {
+    const emailClient = new FakeEmailClient();
+    const { app } = createApp({
+      emailClient,
+    });
+
+    await app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    const token = extractVerificationToken(emailClient);
+
+    const firstResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/confirm", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+        }),
+      }),
+    );
+    const secondResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/confirm", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+        }),
+      }),
+    );
+
+    expect(firstResponse.status).toBe(200);
+    expect(await secondResponse.json()).toEqual({
+      status: "already_verified",
+    });
+    expect(secondResponse.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("returns resend cooldown metadata for pending registrations", async () => {
     const emailClient = new FakeEmailClient();
     const { app } = createApp({
       emailClient,
@@ -350,11 +462,369 @@ describe("App", () => {
       }),
     );
 
+    const resendBody = await resendResponse.json();
+
     expect(resendResponse.status).toBe(200);
-    expect(await resendResponse.json()).toEqual({
+    expectVerificationEmailResponse(resendBody);
+    expect(emailClient.messages).toHaveLength(1);
+  });
+
+  it("returns the same resend metadata for unknown emails without leaking account existence", async () => {
+    const emailClient = new FakeEmailClient();
+    const { app } = createApp({
+      emailClient,
+    });
+
+    const response = await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/request", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "unknown@example.com",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expectVerificationEmailResponse(await response.json());
+    expect(emailClient.messages).toHaveLength(0);
+  });
+
+  it("enforces a persisted hourly resend cap per email", async () => {
+    const emailClient = new FakeEmailClient();
+    const { app } = createApp({
+      config: {
+        ...createApp().config,
+        authEmailMaxPerDay: 10,
+        authEmailMaxPerHour: 1,
+        authEmailResendCooldownSeconds: 0,
+        appPublicUrl: "https://api.example.com",
+        frontendPublicUrl: "https://app.example.com",
+        rateLimitAuthEmailPerMinute: 10,
+      },
+      emailClient,
+    });
+
+    await app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    const resendResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/request", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+        }),
+      }),
+    );
+    const resendBody = await resendResponse.json();
+
+    expect(resendResponse.status).toBe(200);
+    expectVerificationEmailResponse(resendBody, 3_500);
+    expect(emailClient.messages).toHaveLength(1);
+  });
+
+  it("enforces a persisted daily resend cap per email", async () => {
+    const emailClient = new FakeEmailClient();
+    const { app } = createApp({
+      config: {
+        ...createApp().config,
+        authEmailMaxPerDay: 1,
+        authEmailMaxPerHour: 10,
+        authEmailResendCooldownSeconds: 0,
+        appPublicUrl: "https://api.example.com",
+        frontendPublicUrl: "https://app.example.com",
+        rateLimitAuthEmailPerMinute: 10,
+      },
+      emailClient,
+    });
+
+    await app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    const resendResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/request", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+        }),
+      }),
+    );
+    const resendBody = await resendResponse.json();
+
+    expect(resendResponse.status).toBe(200);
+    expectVerificationEmailResponse(resendBody, 80_000);
+    expect(emailClient.messages).toHaveLength(1);
+  });
+
+  it("uses the dedicated auth-email request scope", async () => {
+    const { app } = createApp({
+      config: {
+        ...createApp().config,
+        rateLimitAuthEmailPerMinute: 1,
+      },
+      emailClient: new FakeEmailClient(),
+    });
+
+    const firstResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/request", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+        }),
+      }),
+    );
+
+    const secondResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/request", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+        }),
+      }),
+    );
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(429);
+    expect(await secondResponse.json()).toEqual({
+      error: {
+        code: "RATE_LIMITED",
+        message: "Rate limit exceeded.",
+      },
+    });
+  });
+
+  it("sends a password reset email for verified local accounts", async () => {
+    const emailClient = new FakeEmailClient();
+    const { app } = createApp({
+      emailClient,
+    });
+
+    await app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    const verificationToken = extractVerificationToken(emailClient);
+
+    await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/confirm", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token: verificationToken,
+        }),
+      }),
+    );
+
+    const resetRequestResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/password-reset/request", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+        }),
+      }),
+    );
+    const resetRequestBody = await resetRequestResponse.json();
+
+    expect(resetRequestResponse.status).toBe(200);
+    expectPasswordResetEmailResponse(resetRequestBody);
+    expect(emailClient.messages).toHaveLength(2);
+    expect(emailClient.messages[1]?.text).toContain(
+      "https://app.example.com/reset-password?token=",
+    );
+  });
+
+  it("returns generic password reset metadata for unknown emails", async () => {
+    const emailClient = new FakeEmailClient();
+    const { app } = createApp({
+      emailClient,
+    });
+
+    const response = await app.handle(
+      new Request("http://localhost/api/v1/auth/password-reset/request", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "unknown@example.com",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expectPasswordResetEmailResponse(await response.json());
+    expect(emailClient.messages).toHaveLength(0);
+  });
+
+  it("resets the password and invalidates existing sessions", async () => {
+    const emailClient = new FakeEmailClient();
+    const { app, config } = createApp({
+      emailClient,
+    });
+
+    await app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    const verificationToken = extractVerificationToken(emailClient);
+    const verificationResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/confirm", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token: verificationToken,
+        }),
+      }),
+    );
+    const sessionCookie = verificationResponse.headers.get("set-cookie")!;
+
+    await app.handle(
+      new Request("http://localhost/api/v1/auth/password-reset/request", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+        }),
+      }),
+    );
+
+    const passwordResetToken = extractVerificationToken(emailClient, 1);
+    const confirmResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/password-reset/confirm", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          password: "newpassword123",
+          token: passwordResetToken,
+        }),
+      }),
+    );
+
+    expect(confirmResponse.status).toBe(200);
+    expect(await confirmResponse.json()).toEqual({
       success: true,
     });
-    expect(emailClient.messages).toHaveLength(2);
+
+    const oldSessionResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/session", {
+        headers: {
+          cookie: sessionCookie,
+        },
+      }),
+    );
+
+    expect(await oldSessionResponse.json()).toEqual({
+      authenticated: false,
+      user: null,
+    });
+
+    const oldPasswordLoginResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          password: "password123",
+        }),
+      }),
+    );
+
+    expect(oldPasswordLoginResponse.status).toBe(401);
+    expect(await oldPasswordLoginResponse.json()).toEqual({
+      error: {
+        code: "INVALID_CREDENTIALS",
+        message: "Invalid email or password.",
+      },
+    });
+
+    const newPasswordLoginResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          password: "newpassword123",
+        }),
+      }),
+    );
+    const newPasswordLoginBody = await newPasswordLoginResponse.json();
+
+    expect(newPasswordLoginResponse.status).toBe(200);
+    expect(newPasswordLoginBody.user.email).toBe("owner@example.com");
+    expect(newPasswordLoginResponse.headers.get("set-cookie")).toContain(
+      `${config.sessionCookieName}=`,
+    );
   });
 
   it("auto-links Google sign-in to an existing verified local account", async () => {
@@ -381,7 +851,15 @@ describe("App", () => {
     const token = extractVerificationToken(emailClient);
 
     await instance.app.handle(
-      new Request(`http://localhost/api/v1/auth/verify-email?token=${token}`),
+      new Request("http://localhost/api/v1/auth/verify-email/confirm", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+        }),
+      }),
     );
 
     const localUser = await instance.repositories.userRepository.findByEmail(
@@ -569,7 +1047,15 @@ describe("App", () => {
 
     const token = extractVerificationToken(emailClient);
     const verifyResponse = await instance.app.handle(
-      new Request(`http://localhost/api/v1/auth/verify-email?token=${token}`),
+      new Request("http://localhost/api/v1/auth/verify-email/confirm", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+        }),
+      }),
     );
     const cookie = verifyResponse.headers.get("set-cookie")!;
     const user = await instance.repositories.userRepository.findByEmail(

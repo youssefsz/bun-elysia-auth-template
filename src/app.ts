@@ -98,6 +98,7 @@ export const createApp = (options: CreateAppOptions = {}) => {
     new AuthProviderRegistry([new GoogleTokenVerifier(config)]);
   const sessionService = new SessionService(config);
   const authService = new AuthService({
+    authEmailDeliveryRepository: repositories.authEmailDeliveryRepository,
     authProviderRegistry,
     authProviderRepository: repositories.authProviderRepository,
     config,
@@ -106,14 +107,17 @@ export const createApp = (options: CreateAppOptions = {}) => {
       repositories.emailVerificationTokenRepository,
     localAuthCredentialRepository: repositories.localAuthCredentialRepository,
     logger,
+    passwordResetTokenRepository: repositories.passwordResetTokenRepository,
     sessionService,
     userRepository: repositories.userRepository,
   });
   const accountService = new AccountService({
     authProviderRepository: repositories.authProviderRepository,
+    authEmailDeliveryRepository: repositories.authEmailDeliveryRepository,
     emailVerificationTokenRepository:
       repositories.emailVerificationTokenRepository,
     localAuthCredentialRepository: repositories.localAuthCredentialRepository,
+    passwordResetTokenRepository: repositories.passwordResetTokenRepository,
     userRepository: repositories.userRepository,
   });
   const authGuard = new AuthGuard(authService, config.sessionCookieName);
@@ -121,6 +125,10 @@ export const createApp = (options: CreateAppOptions = {}) => {
     {
       account: { limit: config.rateLimitAccountPerMinute, windowMs: 60_000 },
       auth: { limit: config.rateLimitAuthPerMinute, windowMs: 60_000 },
+      authEmail: {
+        limit: config.rateLimitAuthEmailPerMinute,
+        windowMs: 60_000,
+      },
     },
     logger,
     {
@@ -226,6 +234,8 @@ export const createApp = (options: CreateAppOptions = {}) => {
           "POST /api/v1/auth/verify-email/request",
           "POST /api/v1/auth/verify-email/confirm",
           "GET /api/v1/auth/verify-email",
+          "POST /api/v1/auth/password-reset/request",
+          "POST /api/v1/auth/password-reset/confirm",
           "POST /api/v1/auth/providers/google",
           "GET /api/v1/auth/providers",
           "GET /api/v1/auth/session",

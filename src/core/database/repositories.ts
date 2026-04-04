@@ -1,15 +1,22 @@
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, isNull } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import {
+  authEmailDeliveriesTable,
   authProvidersTable,
   emailVerificationTokensTable,
   localAuthCredentialsTable,
+  passwordResetTokensTable,
   usersTable,
 } from "../../db/schema";
 import type {
+  AuthEmailDelivery,
+  AuthEmailDeliveryKind,
+  AuthEmailDeliveryRateLimitState,
+  AuthEmailDeliveryRepository,
   AuthProvider,
   AuthProviderName,
   AuthProviderRepository,
+  CreateAuthEmailDeliveryInput,
   CreateAuthProviderInput,
   CreateEmailVerificationTokenInput,
   CreateLocalAuthCredentialInput,
@@ -18,6 +25,8 @@ import type {
   EmailVerificationTokenRepository,
   LocalAuthCredential,
   LocalAuthCredentialRepository,
+  PasswordResetToken,
+  PasswordResetTokenRepository,
   UpdateLocalAuthCredentialInput,
 } from "../../domains/auth/auth.types";
 import type {
@@ -73,6 +82,26 @@ const mapEmailVerificationToken = (
   kind: row.kind as EmailVerificationTokenKind,
   pendingName: row.pendingName,
   pendingPasswordHash: row.pendingPasswordHash,
+  tokenHash: row.tokenHash,
+  userId: row.userId,
+});
+
+const mapAuthEmailDelivery = (
+  row: typeof authEmailDeliveriesTable.$inferSelect,
+): AuthEmailDelivery => ({
+  createdAt: row.createdAt,
+  email: row.email,
+  id: row.id,
+  kind: row.kind as AuthEmailDeliveryKind,
+});
+
+const mapPasswordResetToken = (
+  row: typeof passwordResetTokensTable.$inferSelect,
+): PasswordResetToken => ({
+  consumedAt: row.consumedAt,
+  createdAt: row.createdAt,
+  expiresAt: row.expiresAt,
+  id: row.id,
   tokenHash: row.tokenHash,
   userId: row.userId,
 });
@@ -362,21 +391,167 @@ class DrizzleEmailVerificationTokenRepository
     return row ? mapEmailVerificationToken(row) : null;
   }
 
-  async findValidByTokenHash(
+  async findByTokenHash(
     tokenHash: string,
     kind: EmailVerificationTokenKind,
-    now: Date,
   ) {
     const row = await this.db.query.emailVerificationTokensTable.findFirst({
       where: and(
         eq(emailVerificationTokensTable.tokenHash, tokenHash),
         eq(emailVerificationTokensTable.kind, kind),
-        isNull(emailVerificationTokensTable.consumedAt),
-        gt(emailVerificationTokensTable.expiresAt, now),
       ),
     });
 
     return row ? mapEmailVerificationToken(row) : null;
+  }
+}
+
+class DrizzlePasswordResetTokenRepository implements PasswordResetTokenRepository
+{
+  constructor(private readonly db: Database) {}
+
+  async consume(id: string, consumedAt: Date) {
+    const [row] = await this.db
+      .update(passwordResetTokensTable)
+      .set({
+        consumedAt,
+      })
+      .where(eq(passwordResetTokensTable.id, id))
+      .returning();
+
+    return row ? mapPasswordResetToken(row) : null;
+  }
+
+  async create(
+    input: {
+      expiresAt: Date;
+      tokenHash: string;
+      userId: string;
+    },
+  ): Promise<PasswordResetToken> {
+    const [row] = await this.db
+      .insert(passwordResetTokensTable)
+      .values({
+        expiresAt: input.expiresAt,
+        id: createId("reset"),
+        tokenHash: input.tokenHash,
+        userId: input.userId,
+      })
+      .returning();
+
+    return mapPasswordResetToken(row);
+  }
+
+  async deleteById(id: string): Promise<boolean> {
+    const rows = await this.db
+      .delete(passwordResetTokensTable)
+      .where(eq(passwordResetTokensTable.id, id))
+      .returning({ id: passwordResetTokensTable.id });
+
+    return rows.length > 0;
+  }
+
+  async deleteByUserId(userId: string): Promise<number> {
+    const rows = await this.db
+      .delete(passwordResetTokensTable)
+      .where(eq(passwordResetTokensTable.userId, userId))
+      .returning({ id: passwordResetTokensTable.id });
+
+    return rows.length;
+  }
+
+  async deletePendingByUserId(userId: string): Promise<number> {
+    const rows = await this.db
+      .delete(passwordResetTokensTable)
+      .where(
+        and(
+          eq(passwordResetTokensTable.userId, userId),
+          isNull(passwordResetTokensTable.consumedAt),
+        ),
+      )
+      .returning({ id: passwordResetTokensTable.id });
+
+    return rows.length;
+  }
+
+  async findByTokenHash(tokenHash: string): Promise<PasswordResetToken | null> {
+    const row = await this.db.query.passwordResetTokensTable.findFirst({
+      where: eq(passwordResetTokensTable.tokenHash, tokenHash),
+    });
+
+    return row ? mapPasswordResetToken(row) : null;
+  }
+}
+
+class DrizzleAuthEmailDeliveryRepository implements AuthEmailDeliveryRepository {
+  constructor(private readonly db: Database) {}
+
+  async create(
+    input: CreateAuthEmailDeliveryInput,
+  ): Promise<AuthEmailDelivery> {
+    const [row] = await this.db
+      .insert(authEmailDeliveriesTable)
+      .values({
+        createdAt: input.createdAt,
+        email: input.email,
+        id: createId("auth_email"),
+        kind: input.kind,
+      })
+      .returning();
+
+    return mapAuthEmailDelivery(row);
+  }
+
+  async deleteByEmail(email: string): Promise<number> {
+    const rows = await this.db
+      .delete(authEmailDeliveriesTable)
+      .where(eq(authEmailDeliveriesTable.email, email))
+      .returning({ id: authEmailDeliveriesTable.id });
+
+    return rows.length;
+  }
+
+  async deleteById(id: string): Promise<boolean> {
+    const rows = await this.db
+      .delete(authEmailDeliveriesTable)
+      .where(eq(authEmailDeliveriesTable.id, id))
+      .returning({ id: authEmailDeliveriesTable.id });
+
+    return rows.length > 0;
+  }
+
+  async getRateLimitState(
+    email: string,
+    kind: AuthEmailDeliveryKind,
+    hourlyWindowStart: Date,
+    dailyWindowStart: Date,
+  ): Promise<AuthEmailDeliveryRateLimitState> {
+    const rows = await this.db
+      .select({
+        createdAt: authEmailDeliveriesTable.createdAt,
+      })
+      .from(authEmailDeliveriesTable)
+      .where(
+        and(
+          eq(authEmailDeliveriesTable.email, email),
+          eq(authEmailDeliveriesTable.kind, kind),
+          gte(authEmailDeliveriesTable.createdAt, dailyWindowStart),
+        ),
+      )
+      .orderBy(asc(authEmailDeliveriesTable.createdAt));
+
+    const hourlyRows = rows.filter(
+      (row) => row.createdAt.getTime() >= hourlyWindowStart.getTime(),
+    );
+
+    return {
+      dailyCount: rows.length,
+      hourlyCount: hourlyRows.length,
+      latestRequestedAt:
+        rows.length > 0 ? rows[rows.length - 1]!.createdAt : null,
+      oldestDailyRequestedAt: rows[0]?.createdAt ?? null,
+      oldestHourlyRequestedAt: hourlyRows[0]?.createdAt ?? null,
+    };
   }
 }
 
@@ -674,17 +849,14 @@ class InMemoryEmailVerificationTokenRepository
     );
   }
 
-  async findValidByTokenHash(
+  async findByTokenHash(
     tokenHash: string,
     kind: EmailVerificationTokenKind,
-    now: Date,
   ) {
     for (const token of this.store.values()) {
       if (
         token.tokenHash === tokenHash &&
-        token.kind === kind &&
-        token.consumedAt === null &&
-        token.expiresAt.getTime() > now.getTime()
+        token.kind === kind
       ) {
         return token;
       }
@@ -694,13 +866,166 @@ class InMemoryEmailVerificationTokenRepository
   }
 }
 
+class InMemoryPasswordResetTokenRepository
+  implements PasswordResetTokenRepository
+{
+  constructor(
+    private readonly store = new Map<string, PasswordResetToken>(),
+  ) {}
+
+  async consume(id: string, consumedAt: Date) {
+    const current = this.store.get(id);
+
+    if (!current) {
+      return null;
+    }
+
+    const next: PasswordResetToken = {
+      ...current,
+      consumedAt,
+    };
+
+    this.store.set(id, next);
+
+    return next;
+  }
+
+  async create(
+    input: {
+      expiresAt: Date;
+      tokenHash: string;
+      userId: string;
+    },
+  ): Promise<PasswordResetToken> {
+    const token: PasswordResetToken = {
+      consumedAt: null,
+      createdAt: new Date(),
+      expiresAt: input.expiresAt,
+      id: createId("reset"),
+      tokenHash: input.tokenHash,
+      userId: input.userId,
+    };
+
+    this.store.set(token.id, token);
+
+    return token;
+  }
+
+  async deleteById(id: string): Promise<boolean> {
+    return this.store.delete(id);
+  }
+
+  async deleteByUserId(userId: string): Promise<number> {
+    const ids = [...this.store.values()]
+      .filter((token) => token.userId === userId)
+      .map((token) => token.id);
+
+    for (const id of ids) {
+      this.store.delete(id);
+    }
+
+    return ids.length;
+  }
+
+  async deletePendingByUserId(userId: string): Promise<number> {
+    const ids = [...this.store.values()]
+      .filter((token) => token.userId === userId && token.consumedAt === null)
+      .map((token) => token.id);
+
+    for (const id of ids) {
+      this.store.delete(id);
+    }
+
+    return ids.length;
+  }
+
+  async findByTokenHash(tokenHash: string): Promise<PasswordResetToken | null> {
+    for (const token of this.store.values()) {
+      if (token.tokenHash === tokenHash) {
+        return token;
+      }
+    }
+
+    return null;
+  }
+}
+
+class InMemoryAuthEmailDeliveryRepository
+  implements AuthEmailDeliveryRepository
+{
+  constructor(
+    private readonly store = new Map<string, AuthEmailDelivery>(),
+  ) {}
+
+  async create(
+    input: CreateAuthEmailDeliveryInput,
+  ): Promise<AuthEmailDelivery> {
+    const delivery: AuthEmailDelivery = {
+      createdAt: input.createdAt ?? new Date(),
+      email: input.email,
+      id: createId("auth_email"),
+      kind: input.kind,
+    };
+
+    this.store.set(delivery.id, delivery);
+
+    return delivery;
+  }
+
+  async deleteByEmail(email: string): Promise<number> {
+    const ids = [...this.store.values()]
+      .filter((delivery) => delivery.email === email)
+      .map((delivery) => delivery.id);
+
+    for (const id of ids) {
+      this.store.delete(id);
+    }
+
+    return ids.length;
+  }
+
+  async deleteById(id: string): Promise<boolean> {
+    return this.store.delete(id);
+  }
+
+  async getRateLimitState(
+    email: string,
+    kind: AuthEmailDeliveryKind,
+    hourlyWindowStart: Date,
+    dailyWindowStart: Date,
+  ): Promise<AuthEmailDeliveryRateLimitState> {
+    const dailyRows = [...this.store.values()]
+      .filter(
+        (delivery) =>
+          delivery.email === email &&
+          delivery.kind === kind &&
+          delivery.createdAt.getTime() >= dailyWindowStart.getTime(),
+      )
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+    const hourlyRows = dailyRows.filter(
+      (delivery) => delivery.createdAt.getTime() >= hourlyWindowStart.getTime(),
+    );
+
+    return {
+      dailyCount: dailyRows.length,
+      hourlyCount: hourlyRows.length,
+      latestRequestedAt:
+        dailyRows.length > 0 ? dailyRows[dailyRows.length - 1]!.createdAt : null,
+      oldestDailyRequestedAt: dailyRows[0]?.createdAt ?? null,
+      oldestHourlyRequestedAt: hourlyRows[0]?.createdAt ?? null,
+    };
+  }
+}
+
 export const createRepositories = (db: Database | null, logger: Logger) => {
   if (db) {
     return {
+      authEmailDeliveryRepository: new DrizzleAuthEmailDeliveryRepository(db),
       authProviderRepository: new DrizzleAuthProviderRepository(db),
       emailVerificationTokenRepository:
         new DrizzleEmailVerificationTokenRepository(db),
       localAuthCredentialRepository: new DrizzleLocalAuthCredentialRepository(db),
+      passwordResetTokenRepository: new DrizzlePasswordResetTokenRepository(db),
       userRepository: new DrizzleUserRepository(db),
     };
   }
@@ -708,10 +1033,12 @@ export const createRepositories = (db: Database | null, logger: Logger) => {
   logger.warn("database.memory_adapter_enabled", {});
 
   return {
+    authEmailDeliveryRepository: new InMemoryAuthEmailDeliveryRepository(),
     authProviderRepository: new InMemoryAuthProviderRepository(),
     emailVerificationTokenRepository:
       new InMemoryEmailVerificationTokenRepository(),
     localAuthCredentialRepository: new InMemoryLocalAuthCredentialRepository(),
+    passwordResetTokenRepository: new InMemoryPasswordResetTokenRepository(),
     userRepository: new InMemoryUserRepository(),
   };
 };

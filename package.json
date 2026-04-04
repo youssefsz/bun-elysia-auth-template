@@ -13,7 +13,8 @@
     "drizzle-orm": "^0.45.1",
     "elysia": "latest",
     "jose": "^6.2.1",
-    "postgres": "^3.4.8"
+    "postgres": "^3.4.8",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "bun-types": "latest",

@@ -6,7 +6,7 @@ interface RateLimitRule {
   windowMs: number;
 }
 
-type RateLimitScope = "account" | "auth";
+type RateLimitScope = "account" | "auth" | "authEmail";
 
 interface RateLimitSet {
   headers: Record<string, string | number>;

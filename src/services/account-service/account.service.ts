@@ -1,15 +1,19 @@
 import type {
+  AuthEmailDeliveryRepository,
   AuthProviderRepository,
   EmailVerificationTokenRepository,
   LocalAuthCredentialRepository,
+  PasswordResetTokenRepository,
 } from "../../domains/auth/auth.types";
 import type { User, UserRepository } from "../../domains/users/user.types";
 import { AppError } from "../../utils/app-error";
 
 interface AccountServiceDependencies {
+  authEmailDeliveryRepository: AuthEmailDeliveryRepository;
   authProviderRepository: AuthProviderRepository;
   emailVerificationTokenRepository: EmailVerificationTokenRepository;
   localAuthCredentialRepository: LocalAuthCredentialRepository;
+  passwordResetTokenRepository: PasswordResetTokenRepository;
   userRepository: UserRepository;
 }
 
@@ -53,8 +57,10 @@ export class AccountService {
     }
 
     await this.deps.authProviderRepository.deleteByUserId(userId);
+    await this.deps.authEmailDeliveryRepository.deleteByEmail(user.email);
     await this.deps.emailVerificationTokenRepository.deleteByUserId(userId);
     await this.deps.localAuthCredentialRepository.deleteByUserId(userId);
+    await this.deps.passwordResetTokenRepository.deleteByUserId(userId);
 
     const deleted = await this.deps.userRepository.delete(userId);
 

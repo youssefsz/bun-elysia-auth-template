@@ -3,6 +3,7 @@ import { RequestRateLimiter } from "./rate-limiter";
 
 const rules = {
   account: { limit: 2, windowMs: 1_000 },
+  authEmail: { limit: 1, windowMs: 1_000 },
   auth: { limit: 2, windowMs: 1_000 },
 } as const;
 
@@ -112,6 +113,7 @@ describe("RequestRateLimiter", () => {
       const limiter = new RequestRateLimiter(
         {
           account: { limit: 10, windowMs: 10 },
+          authEmail: { limit: 10, windowMs: 10 },
           auth: { limit: 10, windowMs: 10 },
         },
         logger,

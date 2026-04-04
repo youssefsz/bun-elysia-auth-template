@@ -1,4 +1,5 @@
 import { AppError } from "./app-error";
+import { ZodError } from "zod";
 
 interface ValidationLikeError {
   all?: unknown;
@@ -84,6 +85,12 @@ export const buildPublicBaseUrl = (
 export const mapToAppError = (code: string | number, error: unknown) => {
   if (error instanceof AppError) {
     return error;
+  }
+
+  if (error instanceof ZodError) {
+    return new AppError(400, "INVALID_REQUEST", "Invalid input.", {
+      issues: error.issues,
+    });
   }
 
   if (code === "NOT_FOUND") {
