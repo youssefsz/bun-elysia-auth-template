@@ -1,118 +1,159 @@
 # Elysia Auth Template
 
-Reusable Bun + Elysia backend starter for multi-provider authentication with session cookies, local email/password login, frontend-first email verification and password reset, Google sign-in, and verified-email account linking.
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[![Bun](https://img.shields.io/badge/runtime-Bun-000000?logo=bun)](https://bun.sh/)
+[![Elysia](https://img.shields.io/badge/framework-Elysia-1f2937)](https://elysiajs.com/)
+[![TypeScript](https://img.shields.io/badge/language-TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Drizzle ORM](https://img.shields.io/badge/orm-Drizzle%20ORM-C5F74F?logo=drizzle&logoColor=black)](https://orm.drizzle.team/)
+
+Production-minded authentication backend template built with Bun and Elysia. It includes local email and password auth, Google sign-in, JWT-backed session cookies, email verification, password reset flows, rate limiting, and PostgreSQL persistence with Drizzle ORM.
+
+This template is designed to be a clean starting point for open source and commercial projects that need a solid authentication foundation.
 
 ## Features
 
-- Email/password registration and login
-- Email verification and password reset powered by Resend
-- Google sign-in with verified-email-only auto-linking
-- One user account linked to multiple providers
-- Signed session cookies backed by JWTs
-- Account profile endpoints
-- Logout current session and invalidate all sessions
-- PostgreSQL persistence with Drizzle ORM
-- In-memory repository fallback when `DATABASE_URL` is not set
-- Structured logging, standardized error responses, and request rate limiting
+- Email and password registration and login
+- Google sign-in with verified-email-only account linking
+- Frontend-first email verification flow
+- Frontend-first password reset flow
+- Signed HTTP-only session cookies backed by JWTs
+- Multi-provider account linking for the same user
+- Account profile read, update, and delete endpoints
+- Logout and logout-all session invalidation support
+- PostgreSQL persistence with Drizzle ORM migrations
+- In-memory fallback when `DATABASE_URL` is not configured
+- Structured error responses, rate limiting, and request logging
 
-## Stack
+## Technologies Used
 
-- Bun
-- Elysia
-- TypeScript
-- PostgreSQL
-- Drizzle ORM
-- jose
-- Resend Email API
+- [Bun](https://bun.sh/) for runtime, package management, and testing
+- [Elysia](https://elysiajs.com/) for the HTTP API framework
+- [TypeScript](https://www.typescriptlang.org/) for type-safe application code
+- [PostgreSQL](https://www.postgresql.org/) for persistent storage
+- [Drizzle ORM](https://orm.drizzle.team/) and Drizzle Kit for schema management and migrations
+- [Zod](https://zod.dev/) for request validation
+- [jose](https://github.com/panva/jose) for JWT signing and verification
+- [Google Identity](https://developers.google.com/identity) for Google authentication
+- [Resend](https://resend.com/) for transactional auth emails
 
-## Quick Start
+## What You Get
 
-```bash
-bun install
-cp .env.example .env
-bun run db:migrate
-bun run dev
-```
-
-The server runs on `http://localhost:3000` by default.
-
-## Environment Variables
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `NODE_ENV` | No | Runtime environment |
-| `PORT` | No | HTTP server port |
-| `DATABASE_URL` | No | PostgreSQL connection string |
-| `APP_PUBLIC_URL` | Recommended | Trusted public backend origin used for fallback links and redirects |
-| `FRONTEND_PUBLIC_URL` | Recommended | Public frontend origin used in auth emails |
-| `AUTH_EMAIL_RESEND_COOLDOWN_SECONDS` | No | Minimum wait before sending another verification or reset email to the same address |
-| `AUTH_EMAIL_MAX_PER_HOUR` | No | Per-email auth email cap over 1 hour |
-| `AUTH_EMAIL_MAX_PER_DAY` | No | Per-email auth email cap over 24 hours |
-| `EMAIL_VERIFICATION_FRONTEND_PATH` | No | Frontend route that receives verification tokens |
-| `PASSWORD_RESET_FRONTEND_PATH` | No | Frontend route that receives password reset tokens |
-| `GOOGLE_CLIENT_ID` | Yes for Google auth | Validates Google ID tokens |
-| `RESEND_API_KEY` | Yes for local signup | Authenticates verification email delivery |
-| `RESEND_FROM_EMAIL` | Yes for local signup | Sender address used for verification emails |
-| `RESEND_FROM_NAME` | No | Sender display name |
-| `EMAIL_VERIFICATION_TTL_SECONDS` | No | Verification token lifetime |
-| `PASSWORD_RESET_TTL_SECONDS` | No | Password reset token lifetime |
-| `SESSION_SECRET` | Yes | HMAC secret for signed session tokens |
-| `SESSION_ISSUER` | No | JWT issuer and audience |
-| `SESSION_COOKIE_NAME` | No | Browser session cookie name |
-| `SESSION_COOKIE_SAME_SITE` | No | Session cookie SameSite policy |
-| `SESSION_TTL_SECONDS` | No | Session lifetime |
-| `CORS_ORIGINS` | Yes in production | Allowed browser origins for `/api` routes |
-| `TRUST_PROXY_HEADERS` | No | Trust proxy forwarding headers for rate limiting when no trusted public URL is configured |
-| `MAX_REQUEST_BODY_SIZE_BYTES` | No | Global request body limit |
-| `RATE_LIMIT_AUTH_PER_MINUTE` | No | Registration, login, verification, and logout rate limit |
-| `RATE_LIMIT_AUTH_EMAIL_PER_MINUTE` | No | IP-based auth email request rate limit |
-| `RATE_LIMIT_ACCOUNT_PER_MINUTE` | No | Authenticated account route rate limit |
-
-## API Surface
-
-- `GET /`
-- `GET /health`
-- `GET /api`
-- `GET /api/v1`
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/verify-email/request`
 - `POST /api/v1/auth/verify-email/confirm`
-- `GET /api/v1/auth/verify-email`
 - `POST /api/v1/auth/password-reset/request`
 - `POST /api/v1/auth/password-reset/confirm`
 - `POST /api/v1/auth/providers/google`
 - `GET /api/v1/auth/session`
-- `GET /api/v1/auth/providers`
 - `POST /api/v1/auth/logout`
 - `POST /api/v1/auth/logout-all`
 - `GET /api/v1/account`
 - `PATCH /api/v1/account`
 - `DELETE /api/v1/account`
 
-Full request and response examples live in `API.md`.
+Full request and response examples are documented in [API.md](./API.md).
 
-## Auth Email UX
+## Getting Started
 
-- Verification emails prefer `FRONTEND_PUBLIC_URL + EMAIL_VERIFICATION_FRONTEND_PATH`, so users land in your app UI first.
-- Password reset emails prefer `FRONTEND_PUBLIC_URL + PASSWORD_RESET_FRONTEND_PATH`.
-- `POST /api/v1/auth/verify-email/confirm` is the backend source of truth for redeeming verification tokens and setting the session cookie.
-- `GET /api/v1/auth/verify-email` becomes a compatibility redirect to the frontend verification route when `FRONTEND_PUBLIC_URL` is configured.
-- `POST /api/v1/auth/register`, `POST /api/v1/auth/verify-email/request`, and `POST /api/v1/auth/password-reset/request` return frontend-friendly retry metadata with `requestedAt`, `resendAvailableAt`, and `retryAfterSeconds`.
-- Verification is idempotent: the first valid token confirmation returns `verified`, and repeated confirmations return `already_verified`.
-- Auth email cooldowns and hourly/daily caps are persisted per email and shared across verification and password reset flows by kind, so the frontend can show countdowns without leaking whether an account exists.
+### Prerequisites
 
-## Provider Linking
+- [Bun](https://bun.sh/) installed locally
+- PostgreSQL if you want persistent storage
+- A Google OAuth client if you want Google sign-in
+- A [Resend](https://resend.com/) account if you want email verification and password reset emails
 
-- Google sign-in only links to an existing account when Google reports the email as verified.
-- Local email/password accounts become linkable once the verification email is confirmed.
-- After linking, the same user can sign in with either provider and lands on the same account.
+### Installation
 
-## Development
+```bash
+bun install
+cp .env.example .env
+```
+
+Update `.env` with the values you need for your environment.
+
+### Run Database Migrations
+
+```bash
+bun run db:migrate
+```
+
+### Start the Development Server
 
 ```bash
 bun run dev
-bun run start
-bun run typecheck
-bun run test
 ```
+
+The API runs on `http://localhost:3000` by default.
+
+## Available Scripts
+
+| Command | Description |
+| --- | --- |
+| `bun run dev` | Start the app in watch mode |
+| `bun run start` | Start the app once |
+| `bun run test` | Run the test suite |
+| `bun run typecheck` | Run TypeScript type checking |
+| `bun run db:generate` | Generate Drizzle migrations |
+| `bun run db:migrate` | Apply database migrations |
+
+## Configuration
+
+Use [.env.example](./.env.example) as the source of truth for local configuration. The most important variables are listed below.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | No | PostgreSQL connection string. If omitted, the app falls back to in-memory repositories |
+| `SESSION_SECRET` | Yes | Secret used to sign session tokens |
+| `CORS_ORIGINS` | Yes in production | Allowed browser origins for `/api` routes |
+| `APP_PUBLIC_URL` | Recommended | Public backend URL used for redirects and fallback links |
+| `FRONTEND_PUBLIC_URL` | Recommended | Frontend URL used in verification and reset email links |
+| `GOOGLE_CLIENT_ID` | Yes for Google auth | Google OAuth client ID used to validate ID tokens |
+| `RESEND_API_KEY` | Yes for auth emails | Resend API key |
+| `RESEND_FROM_EMAIL` | Yes for auth emails | Sender address for transactional emails |
+| `EMAIL_VERIFICATION_FRONTEND_PATH` | No | Frontend route for email verification |
+| `PASSWORD_RESET_FRONTEND_PATH` | No | Frontend route for password reset |
+| `SESSION_COOKIE_NAME` | No | Browser session cookie name |
+| `SESSION_COOKIE_SAME_SITE` | No | SameSite policy for the auth cookie |
+| `SESSION_TTL_SECONDS` | No | Session lifetime in seconds |
+| `RATE_LIMIT_AUTH_PER_MINUTE` | No | Rate limit for auth endpoints |
+| `RATE_LIMIT_AUTH_EMAIL_PER_MINUTE` | No | Rate limit for auth email requests |
+| `RATE_LIMIT_ACCOUNT_PER_MINUTE` | No | Rate limit for authenticated account routes |
+
+## Project Structure
+
+```text
+src/
+  api/          Route definitions
+  config/       Environment and runtime configuration
+  core/         Auth, database, and email infrastructure
+  db/           Schema and migration files
+  domains/      Shared domain types
+  middleware/   Auth and security middleware
+  schemas/      Request validation schemas
+  services/     Business logic
+  utils/        Shared utilities
+```
+
+## Authentication Notes
+
+- Local sign-up sends a verification email before activating the account
+- Password reset links are intended to land in your frontend first
+- Google accounts are only linked automatically when Google reports the email as verified
+- `POST /api/v1/auth/verify-email/confirm` is the source of truth for token redemption and sign-in
+- `POST /api/v1/auth/password-reset/confirm` invalidates existing sessions after a successful password change
+
+## Open Source
+
+Issues and pull requests are welcome. If you use this template in your own project, feel free to fork it, adapt it, and build on top of it.
+
+## Author
+
+Created and maintained by [Youssef Dhibi](https://github.com/youssefsz).
+
+GitHub: [@youssefsz](https://github.com/youssefsz)
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](./LICENSE) for details.
