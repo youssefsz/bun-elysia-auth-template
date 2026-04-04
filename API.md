@@ -1,360 +1,360 @@
-# API Documentation
+  # API Documentation
 
-API base path: `/api/v1`
+  API base path: `/api/v1`
 
-## Conventions
+  ## Conventions
 
-### Content type
+  ### Content type
 
-Send JSON requests with:
+  Send JSON requests with:
 
-```http
-Content-Type: application/json
-```
+  ```http
+  Content-Type: application/json
+  ```
 
-### Authentication
+  ### Authentication
 
-Authenticated routes use a session cookie set by:
+  Authenticated routes use a session cookie set by:
 
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/providers/google`
-- `POST /api/v1/auth/verify-email/confirm`
+  - `POST /api/v1/auth/login`
+  - `POST /api/v1/auth/providers/google`
+  - `POST /api/v1/auth/verify-email/confirm`
 
-Default cookie name:
+  Default cookie name:
 
-```text
-auth_template_session
-```
+  ```text
+  auth_template_session
+  ```
 
-### Error format
+  ### Error format
 
-All handled errors return this shape:
+  All handled errors return this shape:
 
-```json
-{
-  "error": {
-    "code": "INVALID_REQUEST",
-    "message": "Invalid input."
+  ```json
+  {
+    "error": {
+      "code": "INVALID_REQUEST",
+      "message": "Invalid input."
+    }
   }
-}
-```
+  ```
 
-## Health
+  ## Health
 
-### `GET /health`
+  ### `GET /health`
 
-```json
-{
-  "status": "ok"
-}
-```
-
-### `GET /`
-
-```json
-{
-  "service": "elysia-auth-template",
-  "status": "ok",
-  "version": "v1"
-}
-```
-
-## Auth
-
-### `POST /api/v1/auth/register`
-
-Creates or refreshes a pending local email/password registration and sends a verification email.
-
-Request body:
-
-```json
-{
-  "email": "user@example.com",
-  "name": "Jane Doe",
-  "password": "strong-password-123"
-}
-```
-
-Success response:
-
-```json
-{
-  "success": true,
-  "verificationEmail": {
-    "requestedAt": "2026-04-04T09:00:00.000Z",
-    "resendAvailableAt": "2026-04-04T09:01:00.000Z",
-    "retryAfterSeconds": 60
+  ```json
+  {
+    "status": "ok"
   }
-}
-```
+  ```
 
-### `POST /api/v1/auth/login`
+  ### `GET /`
 
-Signs in with a verified local email/password account.
-
-Request body:
-
-```json
-{
-  "email": "user@example.com",
-  "password": "strong-password-123"
-}
-```
-
-### `POST /api/v1/auth/verify-email/request`
-
-Resends a pending verification email when a local registration has not been confirmed yet.
-
-The response always keeps the same shape, even when the email does not map to a pending registration, so the frontend can show a countdown without leaking account existence.
-
-Request body:
-
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-Success response:
-
-```json
-{
-  "success": true,
-  "verificationEmail": {
-    "requestedAt": "2026-04-04T09:00:00.000Z",
-    "resendAvailableAt": "2026-04-04T09:01:00.000Z",
-    "retryAfterSeconds": 60
+  ```json
+  {
+    "service": "elysia-auth-template",
+    "status": "ok",
+    "version": "v1"
   }
-}
-```
+  ```
 
-### `POST /api/v1/auth/verify-email/confirm`
+  ## Auth
 
-Confirms a verification token and signs the user in.
+  ### `POST /api/v1/auth/register`
 
-This is the endpoint your frontend should call after the user lands on the frontend verification page from the email link.
+  Creates or refreshes a pending local email/password registration and sends a verification email.
 
-Request body:
+  Request body:
 
-```json
-{
-  "token": "verification-token"
-}
-```
-
-Success responses:
-
-```json
-{
-  "status": "verified",
-  "user": {
-    "id": "user_...",
+  ```json
+  {
     "email": "user@example.com",
     "name": "Jane Doe",
-    "emailVerified": true,
-    "createdAt": "2026-03-10T09:00:00.000Z",
-    "updatedAt": "2026-03-10T09:00:00.000Z"
+    "password": "strong-password-123"
   }
-}
-```
+  ```
 
-```json
-{
-  "status": "already_verified"
-}
-```
+  Success response:
 
-### `GET /api/v1/auth/verify-email?token=...`
-
-Compatibility endpoint. When `FRONTEND_PUBLIC_URL` is configured, it redirects the browser to the frontend verification route with the same `token` query param. Otherwise it verifies the token directly and signs the user in.
-
-### `POST /api/v1/auth/password-reset/request`
-
-Requests a password reset email for a verified local account.
-
-The response keeps the same shape even when the email does not map to an account, so the frontend can show countdown UX without leaking account existence.
-
-Request body:
-
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-Success response:
-
-```json
-{
-  "success": true,
-  "passwordResetEmail": {
-    "requestedAt": "2026-04-04T09:00:00.000Z",
-    "resendAvailableAt": "2026-04-04T09:01:00.000Z",
-    "retryAfterSeconds": 60
+  ```json
+  {
+    "success": true,
+    "verificationEmail": {
+      "requestedAt": "2026-04-04T09:00:00.000Z",
+      "resendAvailableAt": "2026-04-04T09:01:00.000Z",
+      "retryAfterSeconds": 60
+    }
   }
-}
-```
+  ```
 
-### `POST /api/v1/auth/password-reset/confirm`
+  ### `POST /api/v1/auth/login`
 
-Consumes a password reset token, updates the password, and invalidates existing sessions.
+  Signs in with a verified local email/password account.
 
-Request body:
+  Request body:
 
-```json
-{
-  "token": "reset-token",
-  "password": "new-strong-password-123"
-}
-```
-
-Success response:
-
-```json
-{
-  "success": true
-}
-```
-
-### `POST /api/v1/auth/providers/google`
-
-Signs in a user with a Google ID token and sets the session cookie.
-
-Request body:
-
-```json
-{
-  "idToken": "google-id-token"
-}
-```
-
-Possible errors:
-
-- `401 INVALID_GOOGLE_TOKEN`
-- `403 EXTERNAL_EMAIL_NOT_VERIFIED`
-- `503 GOOGLE_AUTH_NOT_CONFIGURED`
-- `400 INVALID_REQUEST`
-
-### `GET /api/v1/auth/session`
-
-```json
-{
-  "authenticated": true,
-  "user": {
-    "id": "user_...",
+  ```json
+  {
     "email": "user@example.com",
-    "name": "Jane Doe",
-    "emailVerified": true,
-    "createdAt": "2026-03-10T09:00:00.000Z",
-    "updatedAt": "2026-03-10T09:00:00.000Z"
+    "password": "strong-password-123"
   }
-}
-```
+  ```
 
-When not authenticated:
+  ### `POST /api/v1/auth/verify-email/request`
 
-```json
-{
-  "authenticated": false,
-  "user": null
-}
-```
+  Resends a pending verification email when a local registration has not been confirmed yet.
 
-### `GET /api/v1/auth/providers`
+  The response always keeps the same shape, even when the email does not map to a pending registration, so the frontend can show a countdown without leaking account existence.
 
-Returns linked providers and currently available provider metadata for the authenticated user.
+  Request body:
 
-```json
-{
-  "providers": {
-    "available": [
-      {
-        "provider": "email",
-        "enabled": true
-      },
-      {
-        "provider": "google",
-        "enabled": true
-      }
-    ],
-    "linked": [
-      {
-        "provider": "email",
-        "connectedAt": "2026-03-10T09:00:00.000Z"
-      },
-      {
-        "provider": "google",
-        "connectedAt": "2026-03-11T09:00:00.000Z"
-      }
-    ]
+  ```json
+  {
+    "email": "user@example.com"
   }
-}
-```
+  ```
 
-### `POST /api/v1/auth/logout`
+  Success response:
 
-```json
-{
-  "success": true
-}
-```
-
-### `POST /api/v1/auth/logout-all`
-
-Invalidates all sessions for the current user and clears the browser cookie.
-
-```json
-{
-  "success": true
-}
-```
-
-## Account
-
-### `GET /api/v1/account`
-
-```json
-{
-  "account": {
-    "id": "user_...",
-    "email": "user@example.com",
-    "name": "Jane Doe",
-    "emailVerified": true,
-    "createdAt": "2026-03-10T09:00:00.000Z",
-    "updatedAt": "2026-03-10T09:00:00.000Z"
+  ```json
+  {
+    "success": true,
+    "verificationEmail": {
+      "requestedAt": "2026-04-04T09:00:00.000Z",
+      "resendAvailableAt": "2026-04-04T09:01:00.000Z",
+      "retryAfterSeconds": 60
+    }
   }
-}
-```
+  ```
 
-### `PATCH /api/v1/account`
+  ### `POST /api/v1/auth/verify-email/confirm`
 
-Request body:
+  Confirms a verification token and signs the user in.
 
-```json
-{
-  "name": "Jane Doe"
-}
-```
+  This is the endpoint your frontend should call after the user lands on the frontend verification page from the email link.
 
-### `DELETE /api/v1/account`
+  Request body:
 
-Request body:
+  ```json
+  {
+    "token": "verification-token"
+  }
+  ```
 
-```json
-{
-  "confirmEmail": "user@example.com"
-}
-```
+  Success responses:
 
-Success response:
+  ```json
+  {
+    "status": "verified",
+    "user": {
+      "id": "user_...",
+      "email": "user@example.com",
+      "name": "Jane Doe",
+      "emailVerified": true,
+      "createdAt": "2026-03-10T09:00:00.000Z",
+      "updatedAt": "2026-03-10T09:00:00.000Z"
+    }
+  }
+  ```
 
-```json
-{
-  "success": true
-}
-```
+  ```json
+  {
+    "status": "already_verified"
+  }
+  ```
 
-Possible errors:
+  ### `GET /api/v1/auth/verify-email?token=...`
 
-- `401 UNAUTHORIZED`
-- `400 EMAIL_CONFIRMATION_MISMATCH`
+  Compatibility endpoint. When `FRONTEND_PUBLIC_URL` is configured, it redirects the browser to the frontend verification route with the same `token` query param. Otherwise it verifies the token directly and signs the user in.
+
+  ### `POST /api/v1/auth/password-reset/request`
+
+  Requests a password reset email for a verified local account.
+
+  The response keeps the same shape even when the email does not map to an account, so the frontend can show countdown UX without leaking account existence.
+
+  Request body:
+
+  ```json
+  {
+    "email": "user@example.com"
+  }
+  ```
+
+  Success response:
+
+  ```json
+  {
+    "success": true,
+    "passwordResetEmail": {
+      "requestedAt": "2026-04-04T09:00:00.000Z",
+      "resendAvailableAt": "2026-04-04T09:01:00.000Z",
+      "retryAfterSeconds": 60
+    }
+  }
+  ```
+
+  ### `POST /api/v1/auth/password-reset/confirm`
+
+  Consumes a password reset token, updates the password, and invalidates existing sessions.
+
+  Request body:
+
+  ```json
+  {
+    "token": "reset-token",
+    "password": "new-strong-password-123"
+  }
+  ```
+
+  Success response:
+
+  ```json
+  {
+    "success": true
+  }
+  ```
+
+  ### `POST /api/v1/auth/providers/google`
+
+  Signs in a user with a Google ID token and sets the session cookie.
+
+  Request body:
+
+  ```json
+  {
+    "idToken": "google-id-token"
+  }
+  ```
+
+  Possible errors:
+
+  - `401 INVALID_GOOGLE_TOKEN`
+  - `403 EXTERNAL_EMAIL_NOT_VERIFIED`
+  - `503 GOOGLE_AUTH_NOT_CONFIGURED`
+  - `400 INVALID_REQUEST`
+
+  ### `GET /api/v1/auth/session`
+
+  ```json
+  {
+    "authenticated": true,
+    "user": {
+      "id": "user_...",
+      "email": "user@example.com",
+      "name": "Jane Doe",
+      "emailVerified": true,
+      "createdAt": "2026-03-10T09:00:00.000Z",
+      "updatedAt": "2026-03-10T09:00:00.000Z"
+    }
+  }
+  ```
+
+  When not authenticated:
+
+  ```json
+  {
+    "authenticated": false,
+    "user": null
+  }
+  ```
+
+  ### `GET /api/v1/auth/providers`
+
+  Returns linked providers and currently available provider metadata for the authenticated user.
+
+  ```json
+  {
+    "providers": {
+      "available": [
+        {
+          "provider": "email",
+          "enabled": true
+        },
+        {
+          "provider": "google",
+          "enabled": true
+        }
+      ],
+      "linked": [
+        {
+          "provider": "email",
+          "connectedAt": "2026-03-10T09:00:00.000Z"
+        },
+        {
+          "provider": "google",
+          "connectedAt": "2026-03-11T09:00:00.000Z"
+        }
+      ]
+    }
+  }
+  ```
+
+  ### `POST /api/v1/auth/logout`
+
+  ```json
+  {
+    "success": true
+  }
+  ```
+
+  ### `POST /api/v1/auth/logout-all`
+
+  Invalidates all sessions for the current user and clears the browser cookie.
+
+  ```json
+  {
+    "success": true
+  }
+  ```
+
+  ## Account
+
+  ### `GET /api/v1/account`
+
+  ```json
+  {
+    "account": {
+      "id": "user_...",
+      "email": "user@example.com",
+      "name": "Jane Doe",
+      "emailVerified": true,
+      "createdAt": "2026-03-10T09:00:00.000Z",
+      "updatedAt": "2026-03-10T09:00:00.000Z"
+    }
+  }
+  ```
+
+  ### `PATCH /api/v1/account`
+
+  Request body:
+
+  ```json
+  {
+    "name": "Jane Doe"
+  }
+  ```
+
+  ### `DELETE /api/v1/account`
+
+  Request body:
+
+  ```json
+  {
+    "confirmEmail": "user@example.com"
+  }
+  ```
+
+  Success response:
+
+  ```json
+  {
+    "success": true
+  }
+  ```
+
+  Possible errors:
+
+  - `401 UNAUTHORIZED`
+  - `400 EMAIL_CONFIRMATION_MISMATCH`

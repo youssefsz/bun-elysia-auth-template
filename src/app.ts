@@ -3,6 +3,7 @@ import { createAccountRoutes } from "./api/v1/account/account.routes";
 import { createAuthRoutes } from "./api/v1/auth/auth.routes";
 import type { AppConfig } from "./config/env";
 import { loadConfig } from "./config/env";
+import { validateConfig } from "./config/env";
 import { AuthProviderRegistry } from "./core/auth/auth-provider-registry";
 import { GoogleTokenVerifier } from "./core/auth/google-token-verifier";
 import { SessionService } from "./core/auth/session.service";
@@ -87,7 +88,7 @@ interface CreateAppOptions {
 }
 
 export const createApp = (options: CreateAppOptions = {}) => {
-  const config = options.config ?? loadConfig();
+  const config = validateConfig(options.config ?? loadConfig());
   const logger = options.logger ?? createLogger(config.envName);
   const requestTimings = new WeakMap<Request, number>();
   const database = createDatabaseClient(config, logger);

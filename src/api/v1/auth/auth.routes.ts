@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import type { AppConfig } from "../../../config/env";
 import { clearSessionCookie, setSessionCookie } from "../../../core/auth/session-cookie";
 import type { AuthGuard } from "../../../middleware/auth/auth-guard";
+import { enforceTrustedBrowserOrigin } from "../../../middleware/security/browser-origin";
 import type { RequestRateLimiter } from "../../../middleware/security/rate-limiter";
 import {
   emailVerificationRequestBodySchema,
@@ -14,7 +15,6 @@ import {
   verifyEmailQuerySchema,
 } from "../../../schemas/auth.schemas";
 import type { AuthService } from "../../../services/auth-service/auth.service";
-import { buildPublicBaseUrl } from "../../../utils/http";
 
 interface AuthRouteDependencies {
   authGuard: AuthGuard;
@@ -23,13 +23,6 @@ interface AuthRouteDependencies {
   rateLimiter: RequestRateLimiter;
 }
 
-const resolvePublicBaseUrl = (request: Request, config: AppConfig) =>
-  config.appPublicUrl ??
-  buildPublicBaseUrl(request, {
-    isProduction: config.isProduction,
-    trustProxyHeaders: config.trustProxyHeaders,
-  });
-
 export const createAuthRoutes = (deps: AuthRouteDependencies) =>
   new Elysia({ prefix: "/auth" })
     .post("/register", async ({ body, request, set, server }) => {
@@ -37,13 +30,11 @@ export const createAuthRoutes = (deps: AuthRouteDependencies) =>
 
       const parsedBody = registerBodySchema.parse(body);
 
-      return deps.authService.registerWithEmailPassword(
-        parsedBody,
-        resolvePublicBaseUrl(request, deps.config),
-      );
+      return deps.authService.registerWithEmailPassword(parsedBody);
     })
     .post("/login", async ({ body, cookie, request, set, server }) => {
       deps.rateLimiter.enforce("auth", request, set, server);
+      enforceTrustedBrowserOrigin(request, deps.config);
 
       const parsedBody = loginBodySchema.parse(body);
       const result = await deps.authService.loginWithEmailPassword(parsedBody);
@@ -59,13 +50,11 @@ export const createAuthRoutes = (deps: AuthRouteDependencies) =>
 
       const parsedBody = emailVerificationRequestBodySchema.parse(body);
 
-      return deps.authService.requestEmailVerification(
-        parsedBody.email,
-        resolvePublicBaseUrl(request, deps.config),
-      );
+      return deps.authService.requestEmailVerification(parsedBody.email);
     })
     .post("/verify-email/confirm", async ({ body, cookie, request, set, server }) => {
       deps.rateLimiter.enforce("auth", request, set, server);
+      enforceTrustedBrowserOrigin(request, deps.config);
 
       const parsedBody = verifyEmailBodySchema.parse(body);
       const result = await deps.authService.verifyEmailToken(parsedBody.token);
@@ -125,10 +114,7 @@ export const createAuthRoutes = (deps: AuthRouteDependencies) =>
 
       const parsedBody = passwordResetRequestBodySchema.parse(body);
 
-      return deps.authService.requestPasswordReset(
-        parsedBody.email,
-        resolvePublicBaseUrl(request, deps.config),
-      );
+      return deps.authService.requestPasswordReset(parsedBody.email);
     })
     .post("/password-reset/confirm", async ({ body, request, set, server }) => {
       deps.rateLimiter.enforce("auth", request, set, server);
@@ -139,6 +125,7 @@ export const createAuthRoutes = (deps: AuthRouteDependencies) =>
     })
     .post("/providers/google", async ({ body, cookie, request, set, server }) => {
       deps.rateLimiter.enforce("auth", request, set, server);
+      enforceTrustedBrowserOrigin(request, deps.config);
 
       const parsedBody = googleAuthBodySchema.parse(body);
       const result = await deps.authService.signInWithProvider(
@@ -172,6 +159,7 @@ export const createAuthRoutes = (deps: AuthRouteDependencies) =>
     })
     .post("/logout", async ({ cookie, request, set, server }) => {
       deps.rateLimiter.enforce("auth", request, set, server);
+      enforceTrustedBrowserOrigin(request, deps.config);
       clearSessionCookie(cookie, deps.config);
 
       return {
@@ -180,6 +168,7 @@ export const createAuthRoutes = (deps: AuthRouteDependencies) =>
     })
     .post("/logout-all", async ({ cookie, request, set, server }) => {
       deps.rateLimiter.enforce("auth", request, set, server);
+      enforceTrustedBrowserOrigin(request, deps.config);
 
       const user = await deps.authGuard.require(cookie);
 

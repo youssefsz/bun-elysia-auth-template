@@ -105,9 +105,9 @@ Use [.env.example](./.env.example) as the source of truth for local configuratio
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | No | PostgreSQL connection string. If omitted, the app falls back to in-memory repositories |
-| `SESSION_SECRET` | Yes | Secret used to sign session tokens |
-| `CORS_ORIGINS` | Yes in production | Allowed browser origins for `/api` routes |
-| `APP_PUBLIC_URL` | Recommended | Public backend URL used for redirects and fallback links |
+| `SESSION_SECRET` | Yes | Secret used to sign session tokens. In production it must be unique and at least 32 characters long |
+| `CORS_ORIGINS` | Yes for browser clients | Exact allowed browser origins for `/api` routes. Wildcards are intentionally rejected |
+| `APP_PUBLIC_URL` | Yes unless `FRONTEND_PUBLIC_URL` is set | Public backend URL used for redirects and backend-hosted verification links |
 | `FRONTEND_PUBLIC_URL` | Recommended | Frontend URL used in verification and reset email links |
 | `GOOGLE_CLIENT_ID` | Yes for Google auth | Google OAuth client ID used to validate ID tokens |
 | `RESEND_API_KEY` | Yes for auth emails | Resend API key |
@@ -115,7 +115,7 @@ Use [.env.example](./.env.example) as the source of truth for local configuratio
 | `EMAIL_VERIFICATION_FRONTEND_PATH` | No | Frontend route for email verification |
 | `PASSWORD_RESET_FRONTEND_PATH` | No | Frontend route for password reset |
 | `SESSION_COOKIE_NAME` | No | Browser session cookie name |
-| `SESSION_COOKIE_SAME_SITE` | No | SameSite policy for the auth cookie |
+| `SESSION_COOKIE_SAME_SITE` | No | SameSite policy for the auth cookie. Defaults to `lax` |
 | `SESSION_TTL_SECONDS` | No | Session lifetime in seconds |
 | `RATE_LIMIT_AUTH_PER_MINUTE` | No | Rate limit for auth endpoints |
 | `RATE_LIMIT_AUTH_EMAIL_PER_MINUTE` | No | Rate limit for auth email requests |
@@ -143,6 +143,8 @@ src/
 - Google accounts are only linked automatically when Google reports the email as verified
 - `POST /api/v1/auth/verify-email/confirm` is the source of truth for token redemption and sign-in
 - `POST /api/v1/auth/password-reset/confirm` invalidates existing sessions after a successful password change
+- Sensitive cookie-backed browser writes reject cross-site `Origin` and `Referer` headers
+- Auth emails require an explicit `APP_PUBLIC_URL` or `FRONTEND_PUBLIC_URL`; the server no longer derives public links from request headers
 
 ## Open Source
 

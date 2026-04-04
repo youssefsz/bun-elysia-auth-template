@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import type { AppConfig } from "../../../config/env";
 import { clearSessionCookie } from "../../../core/auth/session-cookie";
 import type { AuthGuard } from "../../../middleware/auth/auth-guard";
+import { enforceTrustedBrowserOrigin } from "../../../middleware/security/browser-origin";
 import type { RequestRateLimiter } from "../../../middleware/security/rate-limiter";
 import {
   deleteAccountBodySchema,
@@ -29,6 +30,7 @@ export const createAccountRoutes = (deps: AccountRouteDependencies) =>
     })
     .patch("/", async ({ body, cookie, request, set, server }) => {
       deps.rateLimiter.enforce("account", request, set, server);
+      enforceTrustedBrowserOrigin(request, deps.config);
 
       const user = await deps.authGuard.require(cookie);
       const parsedBody = updateAccountBodySchema.parse(body);
@@ -39,6 +41,7 @@ export const createAccountRoutes = (deps: AccountRouteDependencies) =>
     })
     .delete("/", async ({ body, cookie, request, set, server }) => {
       deps.rateLimiter.enforce("auth", request, set, server);
+      enforceTrustedBrowserOrigin(request, deps.config);
 
       const user = await deps.authGuard.require(cookie);
       const parsedBody = deleteAccountBodySchema.parse(body);

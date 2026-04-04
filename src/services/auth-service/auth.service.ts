@@ -236,8 +236,29 @@ const toVerificationEmailResponse = (
   verificationEmail: toEmailDeliveryMetadata(availability),
 });
 
+const createImmediateAvailability = (now: Date): EmailDeliveryAvailability => ({
+  requestedAt: now,
+  resendAvailableAt: now,
+  retryAfterSeconds: 0,
+});
+
 export class AuthService {
   constructor(private readonly deps: AuthServiceDependencies) {}
+
+  private requireAuthLinkBaseUrl() {
+    const baseUrl =
+      this.deps.config.frontendPublicUrl ?? this.deps.config.appPublicUrl;
+
+    if (baseUrl) {
+      return baseUrl;
+    }
+
+    throw new AppError(
+      503,
+      "PUBLIC_URL_NOT_CONFIGURED",
+      "APP_PUBLIC_URL or FRONTEND_PUBLIC_URL must be configured before sending auth emails.",
+    );
+  }
 
   async getAuthenticatedSession(token: string | undefined) {
     if (!token) {
@@ -372,7 +393,6 @@ export class AuthService {
 
   async registerWithEmailPassword(
     input: RegisterInput,
-    publicBaseUrl: string,
   ): Promise<VerificationEmailResponse> {
     const now = new Date();
     const email = normalizeEmail(input.email);
@@ -416,7 +436,6 @@ export class AuthService {
           pendingPasswordHash,
           userId: existingUser?.id ?? null,
         },
-        publicBaseUrl,
       );
     } catch (error) {
       await this.deps.authEmailDeliveryRepository.deleteById(delivery.requestId);
@@ -428,10 +447,15 @@ export class AuthService {
 
   async requestEmailVerification(
     email: string,
-    publicBaseUrl: string,
   ): Promise<VerificationEmailResponse> {
     const now = new Date();
     const normalizedEmail = normalizeEmail(email);
+    const existingUser = await this.deps.userRepository.findByEmail(normalizedEmail);
+
+    if (existingUser?.emailVerified) {
+      return toVerificationEmailResponse(createImmediateAvailability(now));
+    }
+
     const delivery = await this.beginAuthEmailDelivery(
       normalizedEmail,
       EMAIL_VERIFICATION_DELIVERY_KIND,
@@ -439,12 +463,6 @@ export class AuthService {
     );
 
     if (!delivery.requestId) {
-      return toVerificationEmailResponse(delivery.availability);
-    }
-
-    const existingUser = await this.deps.userRepository.findByEmail(normalizedEmail);
-
-    if (existingUser?.emailVerified) {
       return toVerificationEmailResponse(delivery.availability);
     }
 
@@ -467,7 +485,6 @@ export class AuthService {
           pendingPasswordHash: pendingToken.pendingPasswordHash,
           userId: pendingToken.userId,
         },
-        publicBaseUrl,
       );
     } catch (error) {
       await this.deps.authEmailDeliveryRepository.deleteById(delivery.requestId);
@@ -479,7 +496,6 @@ export class AuthService {
 
   async requestPasswordReset(
     email: string,
-    publicBaseUrl: string,
   ): Promise<PasswordResetEmailResponse> {
     const now = new Date();
     const normalizedEmail = normalizeEmail(email);
@@ -513,7 +529,6 @@ export class AuthService {
           name: user.name,
           userId: user.id,
         },
-        publicBaseUrl,
       );
     } catch (error) {
       await this.deps.authEmailDeliveryRepository.deleteById(delivery.requestId);
@@ -823,7 +838,6 @@ export class AuthService {
       name: string;
       userId: string;
     },
-    publicBaseUrl: string,
   ) {
     if (!this.deps.emailClient.isEnabled()) {
       throw new AppError(
@@ -847,7 +861,7 @@ export class AuthService {
     });
 
     const resetUrl = createEmailLink(
-      this.deps.config.frontendPublicUrl ?? publicBaseUrl,
+      this.requireAuthLinkBaseUrl(),
       this.deps.config.frontendPublicUrl
         ? this.deps.config.passwordResetFrontendPath
         : "/reset-password",
@@ -880,7 +894,6 @@ export class AuthService {
       pendingPasswordHash: string;
       userId: string | null;
     },
-    publicBaseUrl: string,
   ) {
     if (!this.deps.emailClient.isEnabled()) {
       throw new AppError(
@@ -912,7 +925,7 @@ export class AuthService {
       });
 
     const verificationUrl = createEmailLink(
-      this.deps.config.frontendPublicUrl ?? publicBaseUrl,
+      this.requireAuthLinkBaseUrl(),
       this.deps.config.frontendPublicUrl
         ? this.deps.config.emailVerificationFrontendPath
         : "/api/v1/auth/verify-email",

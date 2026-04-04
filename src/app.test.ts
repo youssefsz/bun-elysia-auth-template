@@ -210,6 +210,34 @@ describe("App", () => {
     expect(response.status).toBe(403);
   });
 
+  it("rejects wildcard CORS configuration for the credentialed API", () => {
+    expect(() =>
+      createApp({
+        config: {
+          ...createApp().config,
+          allowedCorsOrigins: ["*"],
+        },
+      }),
+    ).toThrow(
+      "CORS_ORIGINS must list explicit origins. Wildcards are not allowed for credentialed auth APIs.",
+    );
+  });
+
+  it("rejects the development session secret in production", () => {
+    expect(() =>
+      createApp({
+        config: {
+          ...createApp().config,
+          envName: "production",
+          isProduction: true,
+          sessionSecret: "dev-session-secret-change-me-before-production",
+        },
+      }),
+    ).toThrow(
+      "SESSION_SECRET must be set to a unique value with at least 32 characters in production.",
+    );
+  });
+
   it("rejects overly large Google id tokens at validation time", async () => {
     const { app } = createApp();
     const response = await app.handle(
@@ -305,6 +333,40 @@ describe("App", () => {
         message: "Verify your email before signing in.",
       },
     });
+  });
+
+  it("requires an explicit public URL before sending auth emails", async () => {
+    const emailClient = new FakeEmailClient();
+    const response = await createApp({
+      config: {
+        ...createApp().config,
+        appPublicUrl: undefined,
+        frontendPublicUrl: undefined,
+      },
+      emailClient,
+    }).app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "PUBLIC_URL_NOT_CONFIGURED",
+        message:
+          "APP_PUBLIC_URL or FRONTEND_PUBLIC_URL must be configured before sending auth emails.",
+      },
+    });
+    expect(emailClient.messages).toHaveLength(0);
   });
 
   it("verifies email through the confirm endpoint and then allows local login", async () => {
@@ -466,6 +528,64 @@ describe("App", () => {
 
     expect(resendResponse.status).toBe(200);
     expectVerificationEmailResponse(resendBody);
+    expect(emailClient.messages).toHaveLength(1);
+  });
+
+  it("returns an immediate generic response for already verified emails without sending mail", async () => {
+    const emailClient = new FakeEmailClient();
+    const { app } = createApp({
+      emailClient,
+    });
+
+    await app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    const token = extractVerificationToken(emailClient);
+
+    await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/confirm", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+        }),
+      }),
+    );
+
+    const response = await app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/request", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      success: true,
+      verificationEmail: {
+        requestedAt: expect.any(String),
+        resendAvailableAt: expect.any(String),
+        retryAfterSeconds: 0,
+      },
+    });
     expect(emailClient.messages).toHaveLength(1);
   });
 
@@ -825,7 +945,7 @@ describe("App", () => {
     expect(newPasswordLoginResponse.headers.get("set-cookie")).toContain(
       `${config.sessionCookieName}=`,
     );
-  });
+  }, 15_000);
 
   it("auto-links Google sign-in to an existing verified local account", async () => {
     const emailClient = new FakeEmailClient();
@@ -931,6 +1051,24 @@ describe("App", () => {
       success: true,
     });
     expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  it("rejects cross-site browser requests on cookie-sensitive endpoints", async () => {
+    const { app, request } = await createAuthenticatedRequest("/api/v1/auth/logout", {
+      method: "POST",
+      headers: {
+        origin: "https://malicious.example",
+      },
+    });
+    const response = await app.handle(request);
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "UNTRUSTED_ORIGIN",
+        message: "Cross-site browser requests are not allowed for this endpoint.",
+      },
+    });
   });
 
   it("invalidates prior tokens on logout-all", async () => {

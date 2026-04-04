@@ -73,6 +73,14 @@ const parseUrl = (value: string | undefined) => {
   }
 };
 
+const DEFAULT_DEV_CORS_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+const DEFAULT_DEV_SESSION_SECRET =
+  "dev-session-secret-change-me-before-production";
+const MINIMUM_PRODUCTION_SESSION_SECRET_LENGTH = 32;
+
 export interface AppConfig {
   allowedCorsOrigins: string[];
   appPublicUrl?: string;
@@ -109,7 +117,10 @@ export const loadConfig = (): AppConfig => {
   const isProduction = envName === "production";
 
   return {
-    allowedCorsOrigins: parseCsv(Bun.env.CORS_ORIGINS, ["*"]),
+    allowedCorsOrigins: parseCsv(
+      Bun.env.CORS_ORIGINS,
+      isProduction ? [] : DEFAULT_DEV_CORS_ORIGINS,
+    ),
     appPublicUrl: parseUrl(Bun.env.APP_PUBLIC_URL),
     authEmailMaxPerDay: parseNumber(
       Bun.env.AUTH_EMAIL_MAX_PER_DAY ?? Bun.env.EMAIL_VERIFICATION_MAX_PER_DAY,
@@ -162,13 +173,36 @@ export const loadConfig = (): AppConfig => {
     sessionCookieName: Bun.env.SESSION_COOKIE_NAME ?? "auth_template_session",
     sessionCookieSameSite: parseCookieSameSite(
       Bun.env.SESSION_COOKIE_SAME_SITE,
-      isProduction ? "none" : "lax",
+      "lax",
     ),
     sessionIssuer: Bun.env.SESSION_ISSUER ?? "elysia-auth-template",
     sessionSecret:
-      Bun.env.SESSION_SECRET ??
-      "dev-session-secret-change-me-before-production",
+      Bun.env.SESSION_SECRET ?? DEFAULT_DEV_SESSION_SECRET,
     sessionTtlSeconds: parseNumber(Bun.env.SESSION_TTL_SECONDS, 60 * 60 * 24 * 7),
     trustProxyHeaders: parseBoolean(Bun.env.TRUST_PROXY_HEADERS, false),
   };
+};
+
+export const validateConfig = (config: AppConfig) => {
+  if (config.allowedCorsOrigins.includes("*")) {
+    throw new Error(
+      "CORS_ORIGINS must list explicit origins. Wildcards are not allowed for credentialed auth APIs.",
+    );
+  }
+
+  if (!config.isProduction) {
+    return config;
+  }
+
+  if (
+    !config.sessionSecret ||
+    config.sessionSecret === DEFAULT_DEV_SESSION_SECRET ||
+    config.sessionSecret.length < MINIMUM_PRODUCTION_SESSION_SECRET_LENGTH
+  ) {
+    throw new Error(
+      `SESSION_SECRET must be set to a unique value with at least ${MINIMUM_PRODUCTION_SESSION_SECRET_LENGTH} characters in production.`,
+    );
+  }
+
+  return config;
 };
