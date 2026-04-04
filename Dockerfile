@@ -1,5 +1,5 @@
 # ============================================
-# Widget AI Backend - Dockerfile
+# Backend - Dockerfile
 # Uses Bun runtime for blazing fast performance
 # ============================================
 
