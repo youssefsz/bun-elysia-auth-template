@@ -11,11 +11,11 @@ import type {
 
 Bun.env.DATABASE_URL = "";
 Bun.env.CORS_ORIGINS = "http://localhost:5173";
-Bun.env.GOOGLE_CLIENT_ID = "";
+Bun.env.GOOGLE_CLIENT_IDS = "";
 Bun.env.APP_PUBLIC_URL = "https://api.example.com";
 Bun.env.FRONTEND_PUBLIC_URL = "https://app.example.com";
-Bun.env.SESSION_COOKIE_NAME = "auth_template_session";
-Bun.env.SESSION_ISSUER = "elysia-auth-template";
+Bun.env.SESSION_COOKIE_NAME = "tricky_genie_session";
+Bun.env.SESSION_ISSUER = "tricky-genie";
 Bun.env.RESEND_API_KEY = "";
 Bun.env.RESEND_FROM_EMAIL = "";
 Bun.env.RESEND_FROM_NAME = "";
@@ -96,7 +96,7 @@ const expectPasswordResetEmailResponse = (
 
 const createAuthenticatedRequest = async (
   path: string,
-  init?: RequestInit,
+  init?: RequestInit & { transport?: "bearer" | "cookie" },
 ) => {
   const instance = createApp();
   const user = await instance.repositories.userRepository.create({
@@ -111,7 +111,13 @@ const createAuthenticatedRequest = async (
   });
   const token = await instance.sessionService.sign(user);
   const headers = new Headers(init?.headers);
-  headers.set("cookie", `${instance.config.sessionCookieName}=${token}`);
+  const transport = init?.transport ?? "cookie";
+
+  if (transport === "bearer") {
+    headers.set("authorization", `Bearer ${token}`);
+  } else {
+    headers.set("cookie", `${instance.config.sessionCookieName}=${token}`);
+  }
 
   return {
     ...instance,
@@ -141,7 +147,7 @@ describe("App", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      service: "elysia-auth-template",
+      service: "tricky-genie",
       status: "ok",
       version: "v1",
     });
@@ -281,6 +287,11 @@ describe("App", () => {
 
     expect(response.status).toBe(200);
     expect(body.user.email).toBe("owner@example.com");
+    expect(body.session).toEqual({
+      expiresInSeconds: config.sessionTtlSeconds,
+      token: expect.any(String),
+      tokenType: "Bearer",
+    });
     expect(response.headers.get("set-cookie")).toContain(
       `${config.sessionCookieName}=`,
     );
@@ -405,6 +416,11 @@ describe("App", () => {
 
     expect(verifyResponse.status).toBe(200);
     expect(verifyBody.status).toBe("verified");
+    expect(verifyBody.session).toEqual({
+      expiresInSeconds: config.sessionTtlSeconds,
+      token: expect.any(String),
+      tokenType: "Bearer",
+    });
     expect(verifyBody.user.email).toBe("owner@example.com");
     expect(verifyResponse.headers.get("set-cookie")).toContain(
       `${config.sessionCookieName}=`,
@@ -425,6 +441,11 @@ describe("App", () => {
     const loginBody = await loginResponse.json();
 
     expect(loginResponse.status).toBe(200);
+    expect(loginBody.session).toEqual({
+      expiresInSeconds: config.sessionTtlSeconds,
+      token: expect.any(String),
+      tokenType: "Bearer",
+    });
     expect(loginBody.user.email).toBe("owner@example.com");
   });
 
@@ -1040,6 +1061,22 @@ describe("App", () => {
     expect(typeof body.user.updatedAt).toBe("string");
   });
 
+  it("returns the authenticated session with a valid bearer token", async () => {
+    const { app, request, user } = await createAuthenticatedRequest(
+      "/api/v1/auth/session",
+      {
+        transport: "bearer",
+      },
+    );
+    const response = await app.handle(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.authenticated).toBe(true);
+    expect(body.user.email).toBe(user.email);
+    expect(body.user.id).toBe(user.id);
+  });
+
   it("clears the session cookie on logout", async () => {
     const { app, request } = await createAuthenticatedRequest("/api/v1/auth/logout", {
       method: "POST",
@@ -1051,6 +1088,33 @@ describe("App", () => {
       success: true,
     });
     expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  it("allows mobile clients to use a bearer token on protected account routes", async () => {
+    const getContext = await createAuthenticatedRequest("/api/v1/account", {
+      transport: "bearer",
+    });
+    const getResponse = await getContext.app.handle(getContext.request);
+    const getBody = await getResponse.json();
+
+    expect(getResponse.status).toBe(200);
+    expect(getBody.account.email).toBe("owner@example.com");
+
+    const patchContext = await createAuthenticatedRequest("/api/v1/account", {
+      body: JSON.stringify({
+        name: "Updated Owner",
+      }),
+      headers: {
+        "content-type": "application/json",
+      },
+      method: "PATCH",
+      transport: "bearer",
+    });
+    const patchResponse = await patchContext.app.handle(patchContext.request);
+    const patchBody = await patchResponse.json();
+
+    expect(patchResponse.status).toBe(200);
+    expect(patchBody.account.name).toBe("Updated Owner");
   });
 
   it("rejects cross-site browser requests on cookie-sensitive endpoints", async () => {
@@ -1085,7 +1149,33 @@ describe("App", () => {
     const sessionResponse = await app.handle(
       new Request("http://localhost/api/v1/auth/session", {
         headers: {
-          cookie: `auth_template_session=${token}`,
+          cookie: `tricky_genie_session=${token}`,
+        },
+      }),
+    );
+
+    expect(await sessionResponse.json()).toEqual({
+      authenticated: false,
+      user: null,
+    });
+  });
+
+  it("invalidates bearer tokens on logout-all", async () => {
+    const { app, token, request } = await createAuthenticatedRequest(
+      "/api/v1/auth/logout-all",
+      {
+        method: "POST",
+        transport: "bearer",
+      },
+    );
+    const logoutResponse = await app.handle(request);
+
+    expect(logoutResponse.status).toBe(200);
+
+    const sessionResponse = await app.handle(
+      new Request("http://localhost/api/v1/auth/session", {
+        headers: {
+          authorization: `Bearer ${token}`,
         },
       }),
     );

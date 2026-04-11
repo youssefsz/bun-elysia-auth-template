@@ -1,4 +1,4 @@
-  # API Documentation
+  # Tricky Genie API
 
   API base path: `/api/v1`
 
@@ -14,7 +14,14 @@
 
   ### Authentication
 
-  Authenticated routes use a session cookie set by:
+  Authenticated routes accept either:
+
+  - the session cookie set by the auth endpoints
+  - `Authorization: Bearer <session-token>`
+
+  Successful sign-in responses still set the browser cookie and also return a bearer token payload for native mobile clients.
+
+  Session-establishing endpoints:
 
   - `POST /api/v1/auth/login`
   - `POST /api/v1/auth/providers/google`
@@ -23,7 +30,7 @@
   Default cookie name:
 
   ```text
-  auth_template_session
+  tricky_genie_session
   ```
 
   ### Error format
@@ -53,7 +60,7 @@
 
   ```json
   {
-    "service": "elysia-auth-template",
+    "service": "tricky-genie",
     "status": "ok",
     "version": "v1"
   }
@@ -98,6 +105,26 @@
   {
     "email": "user@example.com",
     "password": "strong-password-123"
+  }
+  ```
+
+  Success response:
+
+  ```json
+  {
+    "user": {
+      "id": "user_...",
+      "email": "user@example.com",
+      "name": "Jane Doe",
+      "emailVerified": true,
+      "createdAt": "2026-03-10T09:00:00.000Z",
+      "updatedAt": "2026-03-10T09:00:00.000Z"
+    },
+    "session": {
+      "token": "jwt-session-token",
+      "tokenType": "Bearer",
+      "expiresInSeconds": 604800
+    }
   }
   ```
 
@@ -154,6 +181,11 @@
       "emailVerified": true,
       "createdAt": "2026-03-10T09:00:00.000Z",
       "updatedAt": "2026-03-10T09:00:00.000Z"
+    },
+    "session": {
+      "token": "jwt-session-token",
+      "tokenType": "Bearer",
+      "expiresInSeconds": 604800
     }
   }
   ```
@@ -228,6 +260,26 @@
   }
   ```
 
+  Success response:
+
+  ```json
+  {
+    "user": {
+      "id": "user_...",
+      "email": "user@example.com",
+      "name": "Jane Doe",
+      "emailVerified": true,
+      "createdAt": "2026-03-10T09:00:00.000Z",
+      "updatedAt": "2026-03-10T09:00:00.000Z"
+    },
+    "session": {
+      "token": "jwt-session-token",
+      "tokenType": "Bearer",
+      "expiresInSeconds": 604800
+    }
+  }
+  ```
+
   Possible errors:
 
   - `401 INVALID_GOOGLE_TOKEN`
@@ -292,6 +344,8 @@
   ```
 
   ### `POST /api/v1/auth/logout`
+
+  Browser clients should call this to clear the session cookie. Native mobile clients should delete the bearer token locally. Use `POST /api/v1/auth/logout-all` when you need server-side revocation.
 
   ```json
   {

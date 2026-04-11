@@ -92,7 +92,7 @@ export interface AppConfig {
   emailVerificationTtlSeconds: number;
   envName: string;
   frontendPublicUrl?: string;
-  googleClientId?: string;
+  googleClientIds: string[];
   isProduction: boolean;
   maxRequestBodySizeBytes: number;
   passwordResetFrontendPath: string;
@@ -144,7 +144,10 @@ export const loadConfig = (): AppConfig => {
     ),
     envName,
     frontendPublicUrl: parseUrl(Bun.env.FRONTEND_PUBLIC_URL),
-    googleClientId: Bun.env.GOOGLE_CLIENT_ID,
+    googleClientIds: parseCsv(
+      Bun.env.GOOGLE_CLIENT_IDS ?? Bun.env.GOOGLE_CLIENT_ID,
+      [],
+    ),
     isProduction,
     maxRequestBodySizeBytes: parseNumber(
       Bun.env.MAX_REQUEST_BODY_SIZE_BYTES,
@@ -170,12 +173,12 @@ export const loadConfig = (): AppConfig => {
     resendApiKey: Bun.env.RESEND_API_KEY,
     resendFromEmail: Bun.env.RESEND_FROM_EMAIL,
     resendFromName: Bun.env.RESEND_FROM_NAME,
-    sessionCookieName: Bun.env.SESSION_COOKIE_NAME ?? "auth_template_session",
+    sessionCookieName: Bun.env.SESSION_COOKIE_NAME ?? "tricky_genie_session",
     sessionCookieSameSite: parseCookieSameSite(
       Bun.env.SESSION_COOKIE_SAME_SITE,
       "lax",
     ),
-    sessionIssuer: Bun.env.SESSION_ISSUER ?? "elysia-auth-template",
+    sessionIssuer: Bun.env.SESSION_ISSUER ?? "tricky-genie",
     sessionSecret:
       Bun.env.SESSION_SECRET ?? DEFAULT_DEV_SESSION_SECRET,
     sessionTtlSeconds: parseNumber(Bun.env.SESSION_TTL_SECONDS, 60 * 60 * 24 * 7),

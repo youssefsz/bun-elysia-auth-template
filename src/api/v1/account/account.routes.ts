@@ -22,7 +22,10 @@ export const createAccountRoutes = (deps: AccountRouteDependencies) =>
     .get("/", async ({ cookie, request, set, server }) => {
       deps.rateLimiter.enforce("account", request, set, server);
 
-      const user = await deps.authGuard.require(cookie);
+      const user = await deps.authGuard.require({
+        cookie,
+        headers: request.headers,
+      });
 
       return {
         account: await deps.accountService.getAccount(user.id),
@@ -32,7 +35,10 @@ export const createAccountRoutes = (deps: AccountRouteDependencies) =>
       deps.rateLimiter.enforce("account", request, set, server);
       enforceTrustedBrowserOrigin(request, deps.config);
 
-      const user = await deps.authGuard.require(cookie);
+      const user = await deps.authGuard.require({
+        cookie,
+        headers: request.headers,
+      });
       const parsedBody = updateAccountBodySchema.parse(body);
 
       return {
@@ -43,7 +49,10 @@ export const createAccountRoutes = (deps: AccountRouteDependencies) =>
       deps.rateLimiter.enforce("auth", request, set, server);
       enforceTrustedBrowserOrigin(request, deps.config);
 
-      const user = await deps.authGuard.require(cookie);
+      const user = await deps.authGuard.require({
+        cookie,
+        headers: request.headers,
+      });
       const parsedBody = deleteAccountBodySchema.parse(body);
       const result = await deps.accountService.deleteAccount(
         user.id,

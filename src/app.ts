@@ -214,7 +214,7 @@ export const createApp = (options: CreateAppOptions = {}) => {
       return createErrorResponse(appError);
     })
     .get("/", () => ({
-      service: "elysia-auth-template",
+      service: "tricky-genie",
       status: "ok",
       version: "v1",
     }))

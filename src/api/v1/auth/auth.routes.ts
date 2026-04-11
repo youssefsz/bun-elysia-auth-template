@@ -23,6 +23,12 @@ interface AuthRouteDependencies {
   rateLimiter: RequestRateLimiter;
 }
 
+const buildSessionPayload = (config: AppConfig, sessionToken: string) => ({
+  expiresInSeconds: config.sessionTtlSeconds,
+  token: sessionToken,
+  tokenType: "Bearer" as const,
+});
+
 export const createAuthRoutes = (deps: AuthRouteDependencies) =>
   new Elysia({ prefix: "/auth" })
     .post("/register", async ({ body, request, set, server }) => {
@@ -42,6 +48,7 @@ export const createAuthRoutes = (deps: AuthRouteDependencies) =>
       setSessionCookie(cookie, deps.config, result.sessionToken);
 
       return {
+        session: buildSessionPayload(deps.config, result.sessionToken),
         user: result.user,
       };
     })
@@ -65,6 +72,7 @@ export const createAuthRoutes = (deps: AuthRouteDependencies) =>
 
       return result.status === "verified"
         ? {
+            session: buildSessionPayload(deps.config, result.sessionToken),
             status: result.status,
             user: result.user,
           }
@@ -136,11 +144,15 @@ export const createAuthRoutes = (deps: AuthRouteDependencies) =>
       setSessionCookie(cookie, deps.config, result.sessionToken);
 
       return {
+        session: buildSessionPayload(deps.config, result.sessionToken),
         user: result.user,
       };
     })
-    .get("/session", async ({ cookie }) => {
-      const token = deps.authGuard.readSessionToken(cookie);
+    .get("/session", async ({ cookie, request }) => {
+      const token = deps.authGuard.readSessionToken({
+        cookie,
+        headers: request.headers,
+      });
       const user = await deps.authService.getAuthenticatedUser(token);
 
       return {
@@ -151,7 +163,10 @@ export const createAuthRoutes = (deps: AuthRouteDependencies) =>
     .get("/providers", async ({ cookie, request, set, server }) => {
       deps.rateLimiter.enforce("account", request, set, server);
 
-      const user = await deps.authGuard.require(cookie);
+      const user = await deps.authGuard.require({
+        cookie,
+        headers: request.headers,
+      });
 
       return {
         providers: await deps.authService.getProviderOverview(user.id),
@@ -170,7 +185,10 @@ export const createAuthRoutes = (deps: AuthRouteDependencies) =>
       deps.rateLimiter.enforce("auth", request, set, server);
       enforceTrustedBrowserOrigin(request, deps.config);
 
-      const user = await deps.authGuard.require(cookie);
+      const user = await deps.authGuard.require({
+        cookie,
+        headers: request.headers,
+      });
 
       await deps.authService.logoutAllSessions(user.id);
       clearSessionCookie(cookie, deps.config);

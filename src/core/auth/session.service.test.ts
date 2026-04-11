@@ -13,7 +13,7 @@ describe("SessionService", () => {
       emailVerificationFrontendPath: "/verify-email",
       envName: "test",
       frontendPublicUrl: "https://app.example.com",
-      googleClientId: undefined,
+      googleClientIds: [],
       isProduction: false,
       maxRequestBodySizeBytes: 64 * 1024,
       passwordResetFrontendPath: "/reset-password",

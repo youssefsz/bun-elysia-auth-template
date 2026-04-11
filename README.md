@@ -1,4 +1,4 @@
-# Elysia Auth Template
+# Tricky Genie API
 
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Bun](https://img.shields.io/badge/runtime-Bun-000000?logo=bun)](https://bun.sh/)
@@ -7,9 +7,9 @@
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Drizzle ORM](https://img.shields.io/badge/orm-Drizzle%20ORM-C5F74F?logo=drizzle&logoColor=black)](https://orm.drizzle.team/)
 
-Production-minded authentication backend template built with Bun and Elysia. It includes local email and password auth, Google sign-in, JWT-backed session cookies, email verification, password reset flows, rate limiting, and PostgreSQL persistence with Drizzle ORM.
+Production-minded authentication and account backend for the Tricky Genie app, built with Bun and Elysia. It includes local email and password auth, Google sign-in, JWT-backed sessions for cookies and bearer tokens, email verification, password reset flows, rate limiting, and PostgreSQL persistence with Drizzle ORM.
 
-This template is designed to be a clean starting point for open source and commercial projects that need a solid authentication foundation.
+This codebase is the backend foundation for Tricky Genie and is meant to evolve with the app instead of staying branded as a generic starter project.
 
 ## Features
 
@@ -17,7 +17,7 @@ This template is designed to be a clean starting point for open source and comme
 - Google sign-in with verified-email-only account linking
 - Frontend-first email verification flow
 - Frontend-first password reset flow
-- Signed HTTP-only session cookies backed by JWTs
+- JWT-backed sessions usable through HTTP-only cookies or `Authorization: Bearer`
 - Multi-provider account linking for the same user
 - Account profile read, update, and delete endpoints
 - Logout and logout-all session invalidation support
@@ -109,7 +109,7 @@ Use [.env.example](./.env.example) as the source of truth for local configuratio
 | `CORS_ORIGINS` | Yes for browser clients | Exact allowed browser origins for `/api` routes. Wildcards are intentionally rejected |
 | `APP_PUBLIC_URL` | Yes unless `FRONTEND_PUBLIC_URL` is set | Public backend URL used for redirects and backend-hosted verification links |
 | `FRONTEND_PUBLIC_URL` | Recommended | Frontend URL used in verification and reset email links |
-| `GOOGLE_CLIENT_ID` | Yes for Google auth | Google OAuth client ID used to validate ID tokens |
+| `GOOGLE_CLIENT_IDS` | Yes for Google auth | Comma-separated allowlist of Google OAuth client IDs allowed to mint ID tokens for Tricky Genie. `GOOGLE_CLIENT_ID` is still accepted as a legacy fallback |
 | `RESEND_API_KEY` | Yes for auth emails | Resend API key |
 | `RESEND_FROM_EMAIL` | Yes for auth emails | Sender address for transactional emails |
 | `EMAIL_VERIFICATION_FRONTEND_PATH` | No | Frontend route for email verification |
@@ -142,13 +142,16 @@ src/
 - Password reset links are intended to land in your frontend first
 - Google accounts are only linked automatically when Google reports the email as verified
 - `POST /api/v1/auth/verify-email/confirm` is the source of truth for token redemption and sign-in
+- Auth success responses include a bearer token payload for native mobile clients while still setting the browser session cookie
+- Google sign-in should allowlist only Tricky Genie's own client IDs, such as your iOS, Android, and web/server IDs
+- `POST /api/v1/auth/logout` clears the local browser cookie; native apps should discard the bearer token locally, or call `POST /api/v1/auth/logout-all` to revoke all active sessions server-side
 - `POST /api/v1/auth/password-reset/confirm` invalidates existing sessions after a successful password change
 - Sensitive cookie-backed browser writes reject cross-site `Origin` and `Referer` headers
 - Auth emails require an explicit `APP_PUBLIC_URL` or `FRONTEND_PUBLIC_URL`; the server no longer derives public links from request headers
 
-## Open Source
+## Project Notes
 
-Issues and pull requests are welcome. If you use this template in your own project, feel free to fork it, adapt it, and build on top of it.
+This backend powers Tricky Genie. Keep the product URLs, email sender details, and Google client IDs aligned with the client app as the product evolves.
 
 ## Author
 

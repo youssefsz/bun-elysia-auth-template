@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "elysia-auth-template",
+      "name": "tricky-genie",
       "dependencies": {
         "drizzle-orm": "^0.45.2",
         "elysia": "latest",

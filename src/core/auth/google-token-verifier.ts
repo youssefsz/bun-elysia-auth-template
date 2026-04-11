@@ -18,7 +18,7 @@ export class GoogleTokenVerifier implements AuthIdentityVerifier {
   constructor(private readonly config: AppConfig) {}
 
   isEnabled() {
-    return Boolean(this.config.googleClientId);
+    return this.config.googleClientIds.length > 0;
   }
 
   async verify(idToken: string): Promise<ExternalAuthIdentity> {
@@ -32,7 +32,7 @@ export class GoogleTokenVerifier implements AuthIdentityVerifier {
 
     try {
       const { payload } = await jwtVerify(idToken, GOOGLE_JWKS, {
-        audience: this.config.googleClientId,
+        audience: this.config.googleClientIds,
         issuer: GOOGLE_ISSUERS,
       });
 
