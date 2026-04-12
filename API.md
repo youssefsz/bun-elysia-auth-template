@@ -463,3 +463,68 @@
 
   - `401 UNAUTHORIZED`
   - `400 EMAIL_CONFIRMATION_MISMATCH`
+
+  ## Genie
+
+  ### `POST /api/v1/genie/chat`
+
+  Creates a single genie turn using the backend-controlled prompt and the server-side AI provider credentials.
+
+  This route requires:
+
+  - an authenticated session cookie or bearer token
+  - an active entitlement for the `genie.chat` feature
+
+  Request body:
+
+  ```json
+  {
+    "conversationId": "conversation-1",
+    "inputText": "I wish for endless money.",
+    "remainingWishes": 3,
+    "history": [
+      {
+        "id": "turn-1",
+        "kind": "chat",
+        "inputText": "Please explain the rules first.",
+        "pose": "idle",
+        "result": "continue",
+        "speech": "Three wishes. One careless phrase is all I need.",
+        "consequence": "No wish was counted.",
+        "summary": "The genie explains the rules.",
+        "playerCanContinue": true,
+        "consumesWish": false
+      }
+    ]
+  }
+  ```
+
+  Success response:
+
+  ```json
+  {
+    "kind": "wish",
+    "pose": "laughing",
+    "result": "continue",
+    "speech": "You asked carefully, but not carefully enough.",
+    "consequence": "The wish backfires in a technically valid way.",
+    "summary": "The genie spots a loophole.",
+    "playerCanContinue": true,
+    "consumesWish": true
+  }
+  ```
+
+  Notes:
+
+  - The backend decides whether the turn is `wish` or `chat` by inspecting `inputText`.
+  - The backend is the source of truth for prompt construction, model selection, and AI credentials.
+  - The client should continue storing conversation history locally and send the current turn context on each request.
+
+  Possible errors:
+
+  - `401 UNAUTHORIZED`
+  - `403 PREMIUM_ACCESS_REQUIRED`
+  - `400 INVALID_REQUEST`
+  - `502 GENIE_UPSTREAM_ERROR`
+  - `502 GENIE_INVALID_RESPONSE`
+  - `503 GENIE_PROVIDER_NOT_CONFIGURED`

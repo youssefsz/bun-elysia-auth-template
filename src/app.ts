@@ -1,21 +1,35 @@
 import { Elysia } from "elysia";
 import { createAccountRoutes } from "./api/v1/account/account.routes";
 import { createAuthRoutes } from "./api/v1/auth/auth.routes";
+import { createBillingRoutes } from "./api/v1/billing/billing.routes";
+import { createGenieRoutes } from "./api/v1/genie/genie.routes";
 import type { AppConfig } from "./config/env";
 import { loadConfig } from "./config/env";
 import { validateConfig } from "./config/env";
 import { AppleTokenVerifier } from "./core/auth/apple-token-verifier";
+import {
+  OpenRouterGenieGateway,
+  type GenieGateway,
+} from "./core/ai/openrouter-genie-gateway";
 import { AuthProviderRegistry } from "./core/auth/auth-provider-registry";
 import { GoogleTokenVerifier } from "./core/auth/google-token-verifier";
 import { SessionService } from "./core/auth/session.service";
+import {
+  createAppleBillingGateway,
+  type AppleBillingGateway,
+} from "./core/billing/apple/apple-app-store-gateway";
 import { createDatabaseClient } from "./core/database/client";
 import { createRepositories } from "./core/database/repositories";
 import type { TransactionalEmailClient } from "./core/email/resend-email-client";
 import { ResendEmailClient } from "./core/email/resend-email-client";
+import { EntitlementGuard } from "./middleware/billing/entitlement-guard";
 import { AuthGuard } from "./middleware/auth/auth-guard";
 import { RequestRateLimiter } from "./middleware/security/rate-limiter";
 import { AccountService } from "./services/account-service/account.service";
 import { AuthService } from "./services/auth-service/auth.service";
+import { AppleBillingService } from "./services/billing-service/apple-billing.service";
+import { EntitlementService } from "./services/entitlement-service/entitlement.service";
+import { GenieService } from "./services/genie-service/genie.service";
 import { AppError } from "./utils/app-error";
 import { createErrorResponse, mapToAppError, requestPath } from "./utils/http";
 import type { Logger } from "./utils/logger";
@@ -82,9 +96,11 @@ const buildPreflightHeaders = ({
 };
 
 interface CreateAppOptions {
+  appleBillingGateway?: AppleBillingGateway;
   authProviderRegistry?: AuthProviderRegistry;
   config?: AppConfig;
   emailClient?: TransactionalEmailClient;
+  genieGateway?: GenieGateway;
   logger?: Logger;
 }
 
@@ -126,6 +142,29 @@ export const createApp = (options: CreateAppOptions = {}) => {
     userRepository: repositories.userRepository,
   });
   const authGuard = new AuthGuard(authService, config.sessionCookieName);
+  const appleBillingGateway =
+    options.appleBillingGateway ?? createAppleBillingGateway(config, logger);
+  const entitlementService = new EntitlementService({
+    productCatalog: config.appleSubscriptionProducts,
+    userEntitlementRepository: repositories.userEntitlementRepository,
+  });
+  const appleBillingService = new AppleBillingService({
+    appleBillingGateway,
+    appleSubscriptionRepository: repositories.appleSubscriptionRepository,
+    appleTransactionRepository: repositories.appleTransactionRepository,
+    billingCustomerRepository: repositories.billingCustomerRepository,
+    billingEventRepository: repositories.billingEventRepository,
+    entitlementService,
+    logger,
+    productCatalog: config.appleSubscriptionProducts,
+  });
+  const entitlementGuard = new EntitlementGuard(authGuard, entitlementService);
+  const genieGateway =
+    options.genieGateway ?? new OpenRouterGenieGateway({ config, logger });
+  const genieService = new GenieService({
+    gateway: genieGateway,
+    logger,
+  });
   const rateLimiter = new RequestRateLimiter(
     {
       account: { limit: config.rateLimitAccountPerMinute, windowMs: 60_000 },
@@ -248,6 +287,12 @@ export const createApp = (options: CreateAppOptions = {}) => {
           "POST /api/v1/auth/logout",
           "POST /api/v1/auth/logout-all",
         ],
+        billing: [
+          "GET /api/v1/billing/entitlements",
+          "POST /api/v1/billing/apple/subscriptions/sync",
+          "POST /api/v1/billing/apple/notifications",
+        ],
+        genie: ["POST /api/v1/genie/chat"],
       },
       status: "ok",
       version: "v1",
@@ -257,6 +302,21 @@ export const createApp = (options: CreateAppOptions = {}) => {
     }))
     .group("/api/v1", (api) =>
       api
+        .use(
+          createBillingRoutes({
+            appleBillingService,
+            authGuard,
+            config,
+            rateLimiter,
+          }),
+        )
+        .use(
+          createGenieRoutes({
+            entitlementGuard,
+            genieService,
+            rateLimiter,
+          }),
+        )
         .use(
           createAuthRoutes({
             authGuard,
@@ -278,11 +338,15 @@ export const createApp = (options: CreateAppOptions = {}) => {
   return {
     accountService,
     app,
+    appleBillingService,
+    appleBillingGateway,
     authProviderRegistry,
     authService,
     config,
     database,
     emailClient,
+    entitlementService,
+    genieService,
     logger,
     rateLimiter,
     repositories,
