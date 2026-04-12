@@ -6,54 +6,53 @@ import type {
 } from "./auth-provider-registry";
 import { AppError } from "../../utils/app-error";
 
-const GOOGLE_JWKS = createRemoteJWKSet(
-  new URL("https://www.googleapis.com/oauth2/v3/certs"),
+const APPLE_JWKS = createRemoteJWKSet(
+  new URL("https://appleid.apple.com/auth/keys"),
 );
 
-const GOOGLE_ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
+const APPLE_ISSUER = "https://appleid.apple.com";
 
-export class GoogleTokenVerifier implements AuthIdentityVerifier {
-  readonly provider = "google" as const;
+export class AppleTokenVerifier implements AuthIdentityVerifier {
+  readonly provider = "apple" as const;
 
   constructor(private readonly config: AppConfig) {}
 
   isEnabled() {
-    return this.config.googleClientIds.length > 0;
+    return this.config.appleClientIds.length > 0;
   }
 
   async verify(idToken: string): Promise<ExternalAuthIdentity> {
     if (!this.isEnabled()) {
       throw new AppError(
         503,
-        "GOOGLE_AUTH_NOT_CONFIGURED",
-        "Google authentication is not configured.",
+        "APPLE_AUTH_NOT_CONFIGURED",
+        "Apple authentication is not configured.",
       );
     }
 
     try {
-      const { payload } = await jwtVerify(idToken, GOOGLE_JWKS, {
-        audience: this.config.googleClientIds,
-        issuer: GOOGLE_ISSUERS,
+      const { payload } = await jwtVerify(idToken, APPLE_JWKS, {
+        audience: this.config.appleClientIds,
+        issuer: APPLE_ISSUER,
       });
 
       const subject = payload.sub;
       const email = typeof payload.email === "string" ? payload.email : null;
       const emailVerified =
         payload.email_verified === true || payload.email_verified === "true";
-      const name = typeof payload.name === "string" ? payload.name : null;
 
       if (!subject || !email) {
         throw new AppError(
           401,
-          "INVALID_GOOGLE_TOKEN",
-          "The Google token is missing required claims.",
+          "INVALID_APPLE_TOKEN",
+          "The Apple token is missing required claims.",
         );
       }
 
       return {
         email,
         emailVerified,
-        name,
+        name: null,
         providerUserId: subject,
       };
     } catch (error) {
@@ -63,8 +62,8 @@ export class GoogleTokenVerifier implements AuthIdentityVerifier {
 
       throw new AppError(
         401,
-        "INVALID_GOOGLE_TOKEN",
-        "Google sign-in token verification failed.",
+        "INVALID_APPLE_TOKEN",
+        "Apple sign-in token verification failed.",
       );
     }
   }

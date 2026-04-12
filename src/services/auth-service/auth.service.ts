@@ -40,6 +40,10 @@ interface PasswordResetConfirmInput {
   token: string;
 }
 
+interface ExternalProviderProfileInput {
+  name?: string;
+}
+
 interface EmailDeliveryMetadata {
   requestedAt: string;
   resendAvailableAt: string;
@@ -89,6 +93,12 @@ const DAY_IN_MS = 24 * HOUR_IN_MS;
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 const deriveNameFromEmail = (email: string) => email.split("@")[0] || "User";
+
+const normalizeOptionalName = (value: string | null | undefined) => {
+  const normalized = value?.trim();
+
+  return normalized ? normalized : null;
+};
 
 const toHex = (bytes: Uint8Array) =>
   [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
@@ -593,7 +603,11 @@ export class AuthService {
     };
   }
 
-  async signInWithProvider(provider: "google", credential: string) {
+  async signInWithProvider(
+    provider: "google" | "apple",
+    credential: string,
+    profile: ExternalProviderProfileInput = {},
+  ) {
     const identity = await this.deps.authProviderRegistry.verify(
       provider,
       credential,
@@ -608,6 +622,8 @@ export class AuthService {
     }
 
     const email = normalizeEmail(identity.email);
+    const preferredName =
+      normalizeOptionalName(profile.name) ?? normalizeOptionalName(identity.name);
     const existingProvider = await this.deps.authProviderRepository.findByProvider(
       provider,
       identity.providerUserId,
@@ -622,13 +638,16 @@ export class AuthService {
       (await this.deps.userRepository.create({
         email,
         emailVerified: true,
-        name: identity.name,
+        name: preferredName ?? deriveNameFromEmail(email),
       }));
 
     const user = existingUser
       ? (await this.deps.userRepository.update(existingUser.id, {
           emailVerified: true,
-          name: identity.name,
+          name:
+            preferredName && preferredName !== existingUser.name
+              ? preferredName
+              : undefined,
         })) ?? createdOrExistingUser
       : createdOrExistingUser;
 

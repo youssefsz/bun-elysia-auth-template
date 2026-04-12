@@ -12,6 +12,7 @@ import type {
 Bun.env.DATABASE_URL = "";
 Bun.env.CORS_ORIGINS = "http://localhost:5173";
 Bun.env.GOOGLE_CLIENT_IDS = "";
+Bun.env.APPLE_CLIENT_IDS = "";
 Bun.env.APP_PUBLIC_URL = "https://api.example.com";
 Bun.env.FRONTEND_PUBLIC_URL = "https://app.example.com";
 Bun.env.SESSION_COOKIE_NAME = "tricky_genie_session";
@@ -43,6 +44,21 @@ const mockGoogleVerifier: AuthIdentityVerifier = {
       emailVerified: true,
       name: "Owner",
       providerUserId: "google_owner_123",
+    };
+  },
+};
+
+const mockAppleVerifier: AuthIdentityVerifier = {
+  isEnabled() {
+    return true;
+  },
+  provider: "apple",
+  async verify() {
+    return {
+      email: "owner@example.com",
+      emailVerified: true,
+      name: null,
+      providerUserId: "apple_owner_123",
     };
   },
 };
@@ -287,6 +303,38 @@ describe("App", () => {
 
     expect(response.status).toBe(200);
     expect(body.user.email).toBe("owner@example.com");
+    expect(body.session).toEqual({
+      expiresInSeconds: config.sessionTtlSeconds,
+      token: expect.any(String),
+      tokenType: "Bearer",
+    });
+    expect(response.headers.get("set-cookie")).toContain(
+      `${config.sessionCookieName}=`,
+    );
+  });
+
+  it("signs in with Apple through the provider registry and preserves the mobile-supplied name", async () => {
+    const { app, config } = createApp({
+      authProviderRegistry: new AuthProviderRegistry([mockAppleVerifier]),
+      emailClient: new FakeEmailClient(),
+    });
+    const response = await app.handle(
+      new Request("http://localhost/api/v1/auth/providers/apple", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          idToken: "test-apple-id-token",
+          name: "Apple Owner",
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.user.email).toBe("owner@example.com");
+    expect(body.user.name).toBe("Apple Owner");
     expect(body.session).toEqual({
       expiresInSeconds: config.sessionTtlSeconds,
       token: expect.any(String),
@@ -1031,6 +1079,71 @@ describe("App", () => {
     ]);
   });
 
+  it("auto-links Apple sign-in to an existing verified local account", async () => {
+    const emailClient = new FakeEmailClient();
+    const instance = createApp({
+      authProviderRegistry: new AuthProviderRegistry([mockAppleVerifier]),
+      emailClient,
+    });
+
+    await instance.app.handle(
+      new Request("http://localhost/api/v1/auth/register", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "owner@example.com",
+          name: "Owner",
+          password: "password123",
+        }),
+      }),
+    );
+
+    const token = extractVerificationToken(emailClient);
+
+    await instance.app.handle(
+      new Request("http://localhost/api/v1/auth/verify-email/confirm", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+        }),
+      }),
+    );
+
+    const localUser = await instance.repositories.userRepository.findByEmail(
+      "owner@example.com",
+    );
+    const appleResponse = await instance.app.handle(
+      new Request("http://localhost/api/v1/auth/providers/apple", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          idToken: "test-apple-id-token",
+          name: "Updated Apple Owner",
+        }),
+      }),
+    );
+    const appleBody = await appleResponse.json();
+
+    expect(appleResponse.status).toBe(200);
+    expect(appleBody.user.id).toBe(localUser?.id);
+    expect(appleBody.user.name).toBe("Updated Apple Owner");
+
+    const providers = await instance.repositories.authProviderRepository.listByUserId(
+      localUser!.id,
+    );
+    expect(providers.map((provider) => provider.provider).sort()).toEqual([
+      "apple",
+      "email",
+    ]);
+  });
+
   it("returns an unauthenticated session without a cookie", async () => {
     const { app } = createApp({
       emailClient: new FakeEmailClient(),
@@ -1202,6 +1315,10 @@ describe("App", () => {
       {
         enabled: false,
         provider: "google",
+      },
+      {
+        enabled: false,
+        provider: "apple",
       },
     ]);
     expect(body.providers.linked).toHaveLength(1);

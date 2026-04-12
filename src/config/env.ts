@@ -84,6 +84,7 @@ const MINIMUM_PRODUCTION_SESSION_SECRET_LENGTH = 32;
 export interface AppConfig {
   allowedCorsOrigins: string[];
   appPublicUrl?: string;
+  appleClientIds: string[];
   authEmailMaxPerDay: number;
   authEmailMaxPerHour: number;
   authEmailResendCooldownSeconds: number;
@@ -122,6 +123,10 @@ export const loadConfig = (): AppConfig => {
       isProduction ? [] : DEFAULT_DEV_CORS_ORIGINS,
     ),
     appPublicUrl: parseUrl(Bun.env.APP_PUBLIC_URL),
+    appleClientIds: parseCsv(
+      Bun.env.APPLE_CLIENT_IDS ?? Bun.env.APPLE_CLIENT_ID,
+      [],
+    ),
     authEmailMaxPerDay: parseNumber(
       Bun.env.AUTH_EMAIL_MAX_PER_DAY ?? Bun.env.EMAIL_VERIFICATION_MAX_PER_DAY,
       10,

@@ -2,6 +2,16 @@ import { z } from "zod";
 
 export const emailSchema = z.string().trim().email().max(320);
 
+const optionalProviderNameSchema = z.preprocess(
+  (value) => (value === null ? undefined : value),
+  z.string().trim().min(1).max(120).optional(),
+);
+
+export const appleAuthBodySchema = z.object({
+  idToken: z.string().min(1).max(8_192),
+  name: optionalProviderNameSchema,
+});
+
 export const googleAuthBodySchema = z.object({
   idToken: z.string().min(1).max(8_192),
 });

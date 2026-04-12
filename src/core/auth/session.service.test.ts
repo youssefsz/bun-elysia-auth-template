@@ -6,6 +6,7 @@ describe("SessionService", () => {
     const service = new SessionService({
       allowedCorsOrigins: ["*"],
       appPublicUrl: "https://api.example.com",
+      appleClientIds: [],
       authEmailMaxPerDay: 10,
       authEmailMaxPerHour: 5,
       authEmailResendCooldownSeconds: 60,

@@ -25,6 +25,7 @@
 
   - `POST /api/v1/auth/login`
   - `POST /api/v1/auth/providers/google`
+  - `POST /api/v1/auth/providers/apple`
   - `POST /api/v1/auth/verify-email/confirm`
 
   Default cookie name:
@@ -287,6 +288,48 @@
   - `503 GOOGLE_AUTH_NOT_CONFIGURED`
   - `400 INVALID_REQUEST`
 
+  ### `POST /api/v1/auth/providers/apple`
+
+  Signs in a user with an Apple identity token and sets the session cookie.
+
+  Request body:
+
+  ```json
+  {
+    "idToken": "apple-identity-token",
+    "name": "Jane Doe"
+  }
+  ```
+
+  `name` is optional, but native mobile clients should send it on the first successful Apple authorization when Apple provides it.
+
+  Success response:
+
+  ```json
+  {
+    "user": {
+      "id": "user_...",
+      "email": "user@example.com",
+      "name": "Jane Doe",
+      "emailVerified": true,
+      "createdAt": "2026-03-10T09:00:00.000Z",
+      "updatedAt": "2026-03-10T09:00:00.000Z"
+    },
+    "session": {
+      "token": "jwt-session-token",
+      "tokenType": "Bearer",
+      "expiresInSeconds": 604800
+    }
+  }
+  ```
+
+  Possible errors:
+
+  - `401 INVALID_APPLE_TOKEN`
+  - `403 EXTERNAL_EMAIL_NOT_VERIFIED`
+  - `503 APPLE_AUTH_NOT_CONFIGURED`
+  - `400 INVALID_REQUEST`
+
   ### `GET /api/v1/auth/session`
 
   ```json
@@ -327,6 +370,10 @@
         {
           "provider": "google",
           "enabled": true
+        },
+        {
+          "provider": "apple",
+          "enabled": true
         }
       ],
       "linked": [
@@ -337,6 +384,10 @@
         {
           "provider": "google",
           "connectedAt": "2026-03-11T09:00:00.000Z"
+        },
+        {
+          "provider": "apple",
+          "connectedAt": "2026-03-12T09:00:00.000Z"
         }
       ]
     }

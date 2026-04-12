@@ -5,6 +5,7 @@ import type { AuthGuard } from "../../../middleware/auth/auth-guard";
 import { enforceTrustedBrowserOrigin } from "../../../middleware/security/browser-origin";
 import type { RequestRateLimiter } from "../../../middleware/security/rate-limiter";
 import {
+  appleAuthBodySchema,
   emailVerificationRequestBodySchema,
   googleAuthBodySchema,
   loginBodySchema,
@@ -139,6 +140,26 @@ export const createAuthRoutes = (deps: AuthRouteDependencies) =>
       const result = await deps.authService.signInWithProvider(
         "google",
         parsedBody.idToken,
+      );
+
+      setSessionCookie(cookie, deps.config, result.sessionToken);
+
+      return {
+        session: buildSessionPayload(deps.config, result.sessionToken),
+        user: result.user,
+      };
+    })
+    .post("/providers/apple", async ({ body, cookie, request, set, server }) => {
+      deps.rateLimiter.enforce("auth", request, set, server);
+      enforceTrustedBrowserOrigin(request, deps.config);
+
+      const parsedBody = appleAuthBodySchema.parse(body);
+      const result = await deps.authService.signInWithProvider(
+        "apple",
+        parsedBody.idToken,
+        {
+          name: parsedBody.name,
+        },
       );
 
       setSessionCookie(cookie, deps.config, result.sessionToken);

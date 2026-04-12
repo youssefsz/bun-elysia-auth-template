@@ -4,6 +4,7 @@ import { createAuthRoutes } from "./api/v1/auth/auth.routes";
 import type { AppConfig } from "./config/env";
 import { loadConfig } from "./config/env";
 import { validateConfig } from "./config/env";
+import { AppleTokenVerifier } from "./core/auth/apple-token-verifier";
 import { AuthProviderRegistry } from "./core/auth/auth-provider-registry";
 import { GoogleTokenVerifier } from "./core/auth/google-token-verifier";
 import { SessionService } from "./core/auth/session.service";
@@ -96,7 +97,10 @@ export const createApp = (options: CreateAppOptions = {}) => {
   const emailClient = options.emailClient ?? new ResendEmailClient(config);
   const authProviderRegistry =
     options.authProviderRegistry ??
-    new AuthProviderRegistry([new GoogleTokenVerifier(config)]);
+    new AuthProviderRegistry([
+      new GoogleTokenVerifier(config),
+      new AppleTokenVerifier(config),
+    ]);
   const sessionService = new SessionService(config);
   const authService = new AuthService({
     authEmailDeliveryRepository: repositories.authEmailDeliveryRepository,
@@ -238,6 +242,7 @@ export const createApp = (options: CreateAppOptions = {}) => {
           "POST /api/v1/auth/password-reset/request",
           "POST /api/v1/auth/password-reset/confirm",
           "POST /api/v1/auth/providers/google",
+          "POST /api/v1/auth/providers/apple",
           "GET /api/v1/auth/providers",
           "GET /api/v1/auth/session",
           "POST /api/v1/auth/logout",

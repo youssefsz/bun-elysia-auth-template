@@ -4,7 +4,7 @@ import { AppError } from "../../utils/app-error";
 export interface ExternalAuthIdentity {
   email: string;
   emailVerified: boolean;
-  name: string;
+  name: string | null;
   providerUserId: string;
 }
 

@@ -7,14 +7,14 @@
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Drizzle ORM](https://img.shields.io/badge/orm-Drizzle%20ORM-C5F74F?logo=drizzle&logoColor=black)](https://orm.drizzle.team/)
 
-Production-minded authentication and account backend for the Tricky Genie app, built with Bun and Elysia. It includes local email and password auth, Google sign-in, JWT-backed sessions for cookies and bearer tokens, email verification, password reset flows, rate limiting, and PostgreSQL persistence with Drizzle ORM.
+Production-minded authentication and account backend for the Tricky Genie app, built with Bun and Elysia. It includes local email and password auth, Google sign-in, Apple sign-in, JWT-backed sessions for cookies and bearer tokens, email verification, password reset flows, rate limiting, and PostgreSQL persistence with Drizzle ORM.
 
 This codebase is the backend foundation for Tricky Genie and is meant to evolve with the app instead of staying branded as a generic starter project.
 
 ## Features
 
 - Email and password registration and login
-- Google sign-in with verified-email-only account linking
+- Google and Apple sign-in with verified-email-only account linking
 - Frontend-first email verification flow
 - Frontend-first password reset flow
 - JWT-backed sessions usable through HTTP-only cookies or `Authorization: Bearer`
@@ -35,6 +35,7 @@ This codebase is the backend foundation for Tricky Genie and is meant to evolve 
 - [Zod](https://zod.dev/) for request validation
 - [jose](https://github.com/panva/jose) for JWT signing and verification
 - [Google Identity](https://developers.google.com/identity) for Google authentication
+- [Sign in with Apple](https://developer.apple.com/sign-in-with-apple/) for Apple authentication
 - [Resend](https://resend.com/) for transactional auth emails
 
 ## What You Get
@@ -46,6 +47,7 @@ This codebase is the backend foundation for Tricky Genie and is meant to evolve 
 - `POST /api/v1/auth/password-reset/request`
 - `POST /api/v1/auth/password-reset/confirm`
 - `POST /api/v1/auth/providers/google`
+- `POST /api/v1/auth/providers/apple`
 - `GET /api/v1/auth/session`
 - `POST /api/v1/auth/logout`
 - `POST /api/v1/auth/logout-all`
@@ -62,6 +64,7 @@ Full request and response examples are documented in [API.md](./API.md).
 - [Bun](https://bun.sh/) installed locally
 - PostgreSQL if you want persistent storage
 - A Google OAuth client if you want Google sign-in
+- Apple App IDs or Services IDs if you want Apple sign-in
 - A [Resend](https://resend.com/) account if you want email verification and password reset emails
 
 ### Installation
@@ -110,6 +113,7 @@ Use [.env.example](./.env.example) as the source of truth for local configuratio
 | `APP_PUBLIC_URL` | Yes unless `FRONTEND_PUBLIC_URL` is set | Public backend URL used for redirects and backend-hosted verification links |
 | `FRONTEND_PUBLIC_URL` | Recommended | Frontend URL used in verification and reset email links |
 | `GOOGLE_CLIENT_IDS` | Yes for Google auth | Comma-separated allowlist of Google OAuth client IDs allowed to mint ID tokens for Tricky Genie. `GOOGLE_CLIENT_ID` is still accepted as a legacy fallback |
+| `APPLE_CLIENT_IDS` | Yes for Apple auth | Comma-separated allowlist of Apple client IDs this backend accepts in the `aud` claim. For native mobile apps this is typically your app bundle identifiers. `APPLE_CLIENT_ID` is still accepted as a legacy fallback |
 | `RESEND_API_KEY` | Yes for auth emails | Resend API key |
 | `RESEND_FROM_EMAIL` | Yes for auth emails | Sender address for transactional emails |
 | `EMAIL_VERIFICATION_FRONTEND_PATH` | No | Frontend route for email verification |
@@ -140,10 +144,12 @@ src/
 
 - Local sign-up sends a verification email before activating the account
 - Password reset links are intended to land in your frontend first
-- Google accounts are only linked automatically when Google reports the email as verified
+- Google and Apple accounts are only linked automatically when the provider reports the email as verified
 - `POST /api/v1/auth/verify-email/confirm` is the source of truth for token redemption and sign-in
 - Auth success responses include a bearer token payload for native mobile clients while still setting the browser session cookie
 - Google sign-in should allowlist only Tricky Genie's own client IDs, such as your iOS, Android, and web/server IDs
+- Apple sign-in should allowlist only Tricky Genie's own Apple client IDs, and the mobile app should forward the one-time Apple display name when Apple provides it on first sign-in
+- Automatic account linking only happens when the normalized email string matches across providers; if a user chooses Apple's private relay email, that relay address is treated as a distinct email unless it exactly matches another login method
 - `POST /api/v1/auth/logout` clears the local browser cookie; native apps should discard the bearer token locally, or call `POST /api/v1/auth/logout-all` to revoke all active sessions server-side
 - `POST /api/v1/auth/password-reset/confirm` invalidates existing sessions after a successful password change
 - Sensitive cookie-backed browser writes reject cross-site `Origin` and `Referer` headers
@@ -151,7 +157,7 @@ src/
 
 ## Project Notes
 
-This backend powers Tricky Genie. Keep the product URLs, email sender details, and Google client IDs aligned with the client app as the product evolves.
+This backend powers Tricky Genie. Keep the product URLs, email sender details, and Google and Apple client IDs aligned with the client app as the product evolves.
 
 ## Author
 

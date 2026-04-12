@@ -1,5 +1,5 @@
-export const supportedAuthProviders = ["email", "google"] as const;
-export const supportedExternalAuthProviders = ["google"] as const;
+export const supportedAuthProviders = ["email", "google", "apple"] as const;
+export const supportedExternalAuthProviders = ["google", "apple"] as const;
 export const authEmailDeliveryKinds = ["verification", "password_reset"] as const;
 export const emailVerificationTokenKinds = ["email_verification"] as const;
 
