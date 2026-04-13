@@ -1,0 +1,65 @@
+# ============================================
+# Tricky Genie API - Docker Compose
+# Configured for Blue/Green deployments
+# ============================================
+
+x-service-template: &service-template
+  build: .
+  healthcheck:
+    test:
+      [
+        "CMD-SHELL",
+        "bun -e \"fetch('http://localhost:3000/health').then(r => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))\"",
+      ]
+    interval: 5s
+    timeout: 5s
+    retries: 5
+    start_period: 10s
+  restart: unless-stopped
+  env_file:
+    - .env
+  environment:
+    - NODE_ENV=production
+    - PORT=3000
+  networks:
+    - traefik
+    - db_network
+  deploy:
+    resources:
+      limits:
+        cpus: "0.5"
+        memory: 512M
+
+services:
+  blue:
+    <<: *service-template
+    container_name: tricky-genie-api-blue
+    environment:
+      - INSTANCE_ID=blue
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tricky-genie-api-blue.rule=Host(`api.genie.dhibi.tn`)"
+      - "traefik.http.routers.tricky-genie-api-blue.entrypoints=websecure"
+      - "traefik.http.routers.tricky-genie-api-blue.tls.certresolver=myresolver"
+      - "traefik.http.routers.tricky-genie-api-blue.middlewares=default-chain@file"
+      - "traefik.http.services.tricky-genie-api-blue.loadbalancer.server.port=3000"
+
+  green:
+    <<: *service-template
+    container_name: tricky-genie-api-green
+    environment:
+      - INSTANCE_ID=green
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tricky-genie-api-green.rule=Host(`api.genie.dhibi.tn`)"
+      - "traefik.http.routers.tricky-genie-api-green.entrypoints=websecure"
+      - "traefik.http.routers.tricky-genie-api-green.tls.certresolver=myresolver"
+      - "traefik.http.routers.tricky-genie-api-green.middlewares=default-chain@file"
+      - "traefik.http.services.tricky-genie-api-green.loadbalancer.server.port=3000"
+
+networks:
+  traefik:
+    external: true
+  db_network:
+    external: true
+    name: postgres-server_db_network

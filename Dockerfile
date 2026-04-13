@@ -11,7 +11,8 @@ WORKDIR /app
 COPY package.json bun.lock* ./
 
 # Install dependencies
-RUN bun install --frozen-lockfile --production
+# Keep dev dependencies available because deploy-time migrations use drizzle-kit.
+RUN bun install --frozen-lockfile
 
 # Copy source files
 COPY . .
