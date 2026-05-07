@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-APP_NAME="tricky-genie-api"
+APP_NAME="bun-elysia-auth"
 HEALTH_PATH="http://localhost:3000/health"
 MAX_ATTEMPTS=60
 SLEEP_SECONDS=2

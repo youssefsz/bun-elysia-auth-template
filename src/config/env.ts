@@ -99,10 +99,6 @@ export interface AppConfig {
   passwordResetFrontendPath: string;
   passwordResetTtlSeconds: number;
   port: number;
-  openRouterApiKey?: string;
-  openRouterAppName?: string;
-  openRouterModelId: string;
-  openRouterSiteUrl?: string;
   rateLimitAccountPerMinute: number;
   rateLimitAuthEmailPerMinute: number;
   rateLimitAuthPerMinute: number;
@@ -162,11 +158,6 @@ export const loadConfig = (): AppConfig => {
       Bun.env.MAX_REQUEST_BODY_SIZE_BYTES,
       64 * 1024,
     ),
-    openRouterApiKey: Bun.env.OPENROUTER_API_KEY?.trim() || undefined,
-    openRouterAppName: Bun.env.OPENROUTER_APP_NAME?.trim() || undefined,
-    openRouterModelId:
-      Bun.env.OPENROUTER_MODEL_ID?.trim() || "openai/gpt-4o-mini",
-    openRouterSiteUrl: parseUrl(Bun.env.OPENROUTER_SITE_URL),
     passwordResetFrontendPath:
       Bun.env.PASSWORD_RESET_FRONTEND_PATH?.trim() || "/reset-password",
     passwordResetTtlSeconds: parseNumber(
@@ -187,12 +178,12 @@ export const loadConfig = (): AppConfig => {
     resendApiKey: Bun.env.RESEND_API_KEY,
     resendFromEmail: Bun.env.RESEND_FROM_EMAIL,
     resendFromName: Bun.env.RESEND_FROM_NAME,
-    sessionCookieName: Bun.env.SESSION_COOKIE_NAME ?? "tricky_genie_session",
+    sessionCookieName: Bun.env.SESSION_COOKIE_NAME ?? "auth_session",
     sessionCookieSameSite: parseCookieSameSite(
       Bun.env.SESSION_COOKIE_SAME_SITE,
       "lax",
     ),
-    sessionIssuer: Bun.env.SESSION_ISSUER ?? "tricky-genie",
+    sessionIssuer: Bun.env.SESSION_ISSUER ?? "bun-elysia-auth",
     sessionSecret:
       Bun.env.SESSION_SECRET ?? DEFAULT_DEV_SESSION_SECRET,
     sessionTtlSeconds: parseNumber(Bun.env.SESSION_TTL_SECONDS, 60 * 60 * 24 * 7),

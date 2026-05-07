@@ -1,5 +1,5 @@
 # ============================================
-# Tricky Genie API - Docker Compose
+# Bun Elysia Auth Template - Docker Compose
 # Configured for Blue/Green deployments
 # ============================================
 
@@ -33,29 +33,29 @@ x-service-template: &service-template
 services:
   blue:
     <<: *service-template
-    container_name: tricky-genie-api-blue
+    container_name: bun-elysia-auth-blue
     environment:
       - INSTANCE_ID=blue
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.tricky-genie-api-blue.rule=Host(`api.genie.dhibi.tn`)"
-      - "traefik.http.routers.tricky-genie-api-blue.entrypoints=websecure"
-      - "traefik.http.routers.tricky-genie-api-blue.tls.certresolver=myresolver"
-      - "traefik.http.routers.tricky-genie-api-blue.middlewares=default-chain@file"
-      - "traefik.http.services.tricky-genie-api-blue.loadbalancer.server.port=3000"
+      - "traefik.http.routers.bun-elysia-auth-blue.rule=Host(`api.example.com`)"
+      - "traefik.http.routers.bun-elysia-auth-blue.entrypoints=websecure"
+      - "traefik.http.routers.bun-elysia-auth-blue.tls.certresolver=myresolver"
+      - "traefik.http.routers.bun-elysia-auth-blue.middlewares=default-chain@file"
+      - "traefik.http.services.bun-elysia-auth-blue.loadbalancer.server.port=3000"
 
   green:
     <<: *service-template
-    container_name: tricky-genie-api-green
+    container_name: bun-elysia-auth-green
     environment:
       - INSTANCE_ID=green
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.tricky-genie-api-green.rule=Host(`api.genie.dhibi.tn`)"
-      - "traefik.http.routers.tricky-genie-api-green.entrypoints=websecure"
-      - "traefik.http.routers.tricky-genie-api-green.tls.certresolver=myresolver"
-      - "traefik.http.routers.tricky-genie-api-green.middlewares=default-chain@file"
-      - "traefik.http.services.tricky-genie-api-green.loadbalancer.server.port=3000"
+      - "traefik.http.routers.bun-elysia-auth-green.rule=Host(`api.example.com`)"
+      - "traefik.http.routers.bun-elysia-auth-green.entrypoints=websecure"
+      - "traefik.http.routers.bun-elysia-auth-green.tls.certresolver=myresolver"
+      - "traefik.http.routers.bun-elysia-auth-green.middlewares=default-chain@file"
+      - "traefik.http.services.bun-elysia-auth-green.loadbalancer.server.port=3000"
 
 networks:
   traefik:

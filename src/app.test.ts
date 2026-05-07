@@ -15,8 +15,8 @@ Bun.env.GOOGLE_CLIENT_IDS = "";
 Bun.env.APPLE_CLIENT_IDS = "";
 Bun.env.APP_PUBLIC_URL = "https://api.example.com";
 Bun.env.FRONTEND_PUBLIC_URL = "https://app.example.com";
-Bun.env.SESSION_COOKIE_NAME = "tricky_genie_session";
-Bun.env.SESSION_ISSUER = "tricky-genie";
+Bun.env.SESSION_COOKIE_NAME = "auth_session";
+Bun.env.SESSION_ISSUER = "bun-elysia-auth";
 Bun.env.RESEND_API_KEY = "";
 Bun.env.RESEND_FROM_EMAIL = "";
 Bun.env.RESEND_FROM_NAME = "";
@@ -163,7 +163,7 @@ describe("App", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      service: "tricky-genie",
+      service: "bun-elysia-auth",
       status: "ok",
       version: "v1",
     });
@@ -1262,7 +1262,7 @@ describe("App", () => {
     const sessionResponse = await app.handle(
       new Request("http://localhost/api/v1/auth/session", {
         headers: {
-          cookie: `tricky_genie_session=${token}`,
+          cookie: `auth_session=${token}`,
         },
       }),
     );

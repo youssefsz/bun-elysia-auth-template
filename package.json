@@ -1,5 +1,5 @@
 {
-  "name": "tricky-genie",
+  "name": "bun-elysia-auth-template",
   "version": "1.0.0",
   "scripts": {
     "db:generate": "drizzle-kit generate",
