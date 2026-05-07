@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, gte, isNull } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { createBillingRepositories } from "./billing-repositories";
+
 import {
   authEmailDeliveriesTable,
   authProvidersTable,
@@ -1021,7 +1021,6 @@ class InMemoryAuthEmailDeliveryRepository
 export const createRepositories = (db: Database | null, logger: Logger) => {
   if (db) {
     return {
-      ...createBillingRepositories(db, logger),
       authEmailDeliveryRepository: new DrizzleAuthEmailDeliveryRepository(db),
       authProviderRepository: new DrizzleAuthProviderRepository(db),
       emailVerificationTokenRepository:
@@ -1035,7 +1034,6 @@ export const createRepositories = (db: Database | null, logger: Logger) => {
   logger.warn("database.memory_adapter_enabled", {});
 
   return {
-    ...createBillingRepositories(db, logger),
     authEmailDeliveryRepository: new InMemoryAuthEmailDeliveryRepository(),
     authProviderRepository: new InMemoryAuthProviderRepository(),
     emailVerificationTokenRepository:

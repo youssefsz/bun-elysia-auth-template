@@ -473,7 +473,6 @@
   This route requires:
 
   - an authenticated session cookie or bearer token
-  - an active entitlement for the `genie.chat` feature
 
   Request body:
 
@@ -523,7 +522,6 @@
   Possible errors:
 
   - `401 UNAUTHORIZED`
-  - `403 PREMIUM_ACCESS_REQUIRED`
   - `400 INVALID_REQUEST`
   - `502 GENIE_UPSTREAM_ERROR`
   - `502 GENIE_INVALID_RESPONSE`

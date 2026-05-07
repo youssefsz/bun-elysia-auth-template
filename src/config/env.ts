@@ -1,11 +1,3 @@
-import { z } from "zod";
-
-const billingProductCatalogItemSchema = z.object({
-  featureKeys: z.array(z.string().trim().min(1)).min(1),
-  planKey: z.string().trim().min(1),
-  productId: z.string().trim().min(1),
-});
-
 const parseNumber = (value: string | undefined, fallback: number) => {
   if (!value) {
     return fallback;
@@ -64,38 +56,6 @@ const parseCsv = (value: string | undefined, fallback: string[]) => {
   return items.length > 0 ? items : fallback;
 };
 
-const parseOptionalNumber = (value: string | undefined) => {
-  if (!value) {
-    return undefined;
-  }
-
-  const parsed = Number(value);
-
-  return Number.isFinite(parsed) ? parsed : undefined;
-};
-
-const parseApplePrivateKey = (value: string | undefined) => {
-  if (!value) {
-    return undefined;
-  }
-
-  return value.replace(/\\n/g, "\n").trim();
-};
-
-const parseBillingProductCatalog = (value: string | undefined) => {
-  if (!value) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-
-    return z.array(billingProductCatalogItemSchema).parse(parsed);
-  } catch {
-    return [];
-  }
-};
-
 const parseUrl = (value: string | undefined) => {
   if (!value) {
     return undefined;
@@ -124,19 +84,7 @@ const MINIMUM_PRODUCTION_SESSION_SECRET_LENGTH = 32;
 export interface AppConfig {
   allowedCorsOrigins: string[];
   appPublicUrl?: string;
-  appleAppStoreAppId?: number;
-  appleAppStoreBundleId?: string;
   appleClientIds: string[];
-  appleEnableOnlineChecks: boolean;
-  appleRootCaPaths: string[];
-  appleSubscriptionProducts: {
-    featureKeys: string[];
-    planKey: string;
-    productId: string;
-  }[];
-  appleSubscriptionServerIssuerId?: string;
-  appleSubscriptionServerKeyId?: string;
-  appleSubscriptionServerPrivateKey?: string;
   authEmailMaxPerDay: number;
   authEmailMaxPerHour: number;
   authEmailResendCooldownSeconds: number;
@@ -179,26 +127,9 @@ export const loadConfig = (): AppConfig => {
       isProduction ? [] : DEFAULT_DEV_CORS_ORIGINS,
     ),
     appPublicUrl: parseUrl(Bun.env.APP_PUBLIC_URL),
-    appleAppStoreAppId: parseOptionalNumber(Bun.env.APPLE_APP_STORE_APP_ID),
-    appleAppStoreBundleId: Bun.env.APPLE_APP_STORE_BUNDLE_ID?.trim() || undefined,
     appleClientIds: parseCsv(
       Bun.env.APPLE_CLIENT_IDS ?? Bun.env.APPLE_CLIENT_ID,
       [],
-    ),
-    appleEnableOnlineChecks: parseBoolean(
-      Bun.env.APPLE_ENABLE_ONLINE_CHECKS,
-      true,
-    ),
-    appleRootCaPaths: parseCsv(Bun.env.APPLE_ROOT_CA_PATHS, []),
-    appleSubscriptionProducts: parseBillingProductCatalog(
-      Bun.env.APPLE_SUBSCRIPTION_PRODUCTS,
-    ),
-    appleSubscriptionServerIssuerId:
-      Bun.env.APPLE_APP_STORE_ISSUER_ID?.trim() || undefined,
-    appleSubscriptionServerKeyId:
-      Bun.env.APPLE_APP_STORE_KEY_ID?.trim() || undefined,
-    appleSubscriptionServerPrivateKey: parseApplePrivateKey(
-      Bun.env.APPLE_APP_STORE_PRIVATE_KEY,
     ),
     authEmailMaxPerDay: parseNumber(
       Bun.env.AUTH_EMAIL_MAX_PER_DAY ?? Bun.env.EMAIL_VERIFICATION_MAX_PER_DAY,

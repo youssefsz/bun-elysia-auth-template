@@ -1,11 +1,11 @@
 import { Elysia } from "elysia";
-import type { EntitlementGuard } from "../../../middleware/billing/entitlement-guard";
+import type { AuthGuard } from "../../../middleware/auth/auth-guard";
 import type { RequestRateLimiter } from "../../../middleware/security/rate-limiter";
 import { genieChatBodySchema } from "../../../schemas/genie.schemas";
 import { GenieService } from "../../../services/genie-service/genie.service";
 
 interface GenieRouteDependencies {
-  entitlementGuard: EntitlementGuard;
+  authGuard: AuthGuard;
   genieService: GenieService;
   rateLimiter: RequestRateLimiter;
 }
@@ -16,13 +16,10 @@ export const createGenieRoutes = (deps: GenieRouteDependencies) =>
     async ({ body, cookie, request, set, server }) => {
       deps.rateLimiter.enforce("account", request, set, server);
 
-      const { user } = await deps.entitlementGuard.requireFeature(
-        {
-          cookie,
-          headers: request.headers,
-        },
-        "genie.chat",
-      );
+      const user = await deps.authGuard.require({
+        cookie,
+        headers: request.headers,
+      });
       const parsedBody = genieChatBodySchema.parse(body);
 
       return deps.genieService.createReply({
