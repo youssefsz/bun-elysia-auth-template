@@ -5,6 +5,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 export const usersTable = pgTable(
@@ -15,7 +16,7 @@ export const usersTable = pgTable(
       .notNull(),
     email: text("email").notNull(),
     emailVerified: boolean("email_verified").default(false).notNull(),
-    id: text("id").primaryKey(),
+    id: uuid("id").primaryKey(),
     name: text("name").notNull(),
     sessionVersion: integer("session_version").default(1).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })

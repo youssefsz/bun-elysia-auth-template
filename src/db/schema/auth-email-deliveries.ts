@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const authEmailDeliveriesTable = pgTable(
   "auth_email_deliveries",
@@ -7,7 +7,7 @@ export const authEmailDeliveriesTable = pgTable(
       .defaultNow()
       .notNull(),
     email: text("email").notNull(),
-    id: text("id").primaryKey(),
+    id: uuid("id").primaryKey(),
     kind: text("kind").notNull(),
   },
   (table) => ({

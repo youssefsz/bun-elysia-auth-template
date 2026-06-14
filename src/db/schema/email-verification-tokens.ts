@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 export const emailVerificationTokensTable = pgTable(
@@ -10,12 +10,12 @@ export const emailVerificationTokensTable = pgTable(
       .notNull(),
     email: text("email").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    id: text("id").primaryKey(),
+    id: uuid("id").primaryKey(),
     kind: text("kind").notNull(),
     pendingName: text("pending_name"),
     pendingPasswordHash: text("pending_password_hash").notNull(),
     tokenHash: text("token_hash").notNull(),
-    userId: text("user_id").references(() => usersTable.id, {
+    userId: uuid("user_id").references(() => usersTable.id, {
       onDelete: "cascade",
     }),
   },

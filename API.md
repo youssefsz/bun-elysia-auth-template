@@ -114,7 +114,7 @@
   ```json
   {
     "user": {
-      "id": "user_...",
+      "id": "019535d9-3df7-79fb-b466-fa907fa17f9e",
       "email": "user@example.com",
       "name": "Jane Doe",
       "emailVerified": true,
@@ -176,7 +176,7 @@
   {
     "status": "verified",
     "user": {
-      "id": "user_...",
+      "id": "019535d9-3df7-79fb-b466-fa907fa17f9e",
       "email": "user@example.com",
       "name": "Jane Doe",
       "emailVerified": true,
@@ -266,7 +266,7 @@
   ```json
   {
     "user": {
-      "id": "user_...",
+      "id": "019535d9-3df7-79fb-b466-fa907fa17f9e",
       "email": "user@example.com",
       "name": "Jane Doe",
       "emailVerified": true,
@@ -308,7 +308,7 @@
   ```json
   {
     "user": {
-      "id": "user_...",
+      "id": "019535d9-3df7-79fb-b466-fa907fa17f9e",
       "email": "user@example.com",
       "name": "Jane Doe",
       "emailVerified": true,
@@ -336,7 +336,7 @@
   {
     "authenticated": true,
     "user": {
-      "id": "user_...",
+      "id": "019535d9-3df7-79fb-b466-fa907fa17f9e",
       "email": "user@example.com",
       "name": "Jane Doe",
       "emailVerified": true,
@@ -421,7 +421,7 @@
   ```json
   {
     "account": {
-      "id": "user_...",
+      "id": "019535d9-3df7-79fb-b466-fa907fa17f9e",
       "email": "user@example.com",
       "name": "Jane Doe",
       "emailVerified": true,

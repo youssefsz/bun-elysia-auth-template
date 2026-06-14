@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 export const localAuthCredentialsTable = pgTable(
@@ -12,7 +12,7 @@ export const localAuthCredentialsTable = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
-    userId: text("user_id")
+    userId: uuid("user_id")
       .primaryKey()
       .references(() => usersTable.id, { onDelete: "cascade" }),
   },

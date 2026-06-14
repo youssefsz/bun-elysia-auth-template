@@ -36,7 +36,7 @@ import type {
   User,
   UserRepository,
 } from "../../domains/users/user.types";
-import { createId } from "../../utils/ids";
+import { createUuidV7 } from "../../utils/ids";
 import type { Logger } from "../../utils/logger";
 import type * as schema from "../../db/schema";
 
@@ -116,7 +116,7 @@ class DrizzleUserRepository implements UserRepository {
       .values({
         email: input.email,
         emailVerified: input.emailVerified,
-        id: createId("user"),
+        id: createUuidV7(),
         name: input.name,
         sessionVersion: input.sessionVersion ?? 1,
       })
@@ -192,7 +192,7 @@ class DrizzleAuthProviderRepository implements AuthProviderRepository {
     const [row] = await this.db
       .insert(authProvidersTable)
       .values({
-        id: createId("auth"),
+        id: createUuidV7(),
         provider: input.provider,
         providerUserId: input.providerUserId,
         userId: input.userId,
@@ -329,7 +329,7 @@ class DrizzleEmailVerificationTokenRepository
       .values({
         email: input.email,
         expiresAt: input.expiresAt,
-        id: createId("verify"),
+        id: createUuidV7(),
         kind: input.kind,
         pendingName: input.pendingName ?? null,
         pendingPasswordHash: input.pendingPasswordHash,
@@ -434,7 +434,7 @@ class DrizzlePasswordResetTokenRepository implements PasswordResetTokenRepositor
       .insert(passwordResetTokensTable)
       .values({
         expiresAt: input.expiresAt,
-        id: createId("reset"),
+        id: createUuidV7(),
         tokenHash: input.tokenHash,
         userId: input.userId,
       })
@@ -495,7 +495,7 @@ class DrizzleAuthEmailDeliveryRepository implements AuthEmailDeliveryRepository 
       .values({
         createdAt: input.createdAt,
         email: input.email,
-        id: createId("auth_email"),
+        id: createUuidV7(),
         kind: input.kind,
       })
       .returning();
@@ -565,7 +565,7 @@ class InMemoryUserRepository implements UserRepository {
       createdAt: now,
       email: input.email,
       emailVerified: input.emailVerified,
-      id: createId("user"),
+      id: createUuidV7(),
       name: input.name,
       sessionVersion: input.sessionVersion ?? 1,
       updatedAt: now,
@@ -639,7 +639,7 @@ class InMemoryAuthProviderRepository implements AuthProviderRepository {
   async create(input: CreateAuthProviderInput): Promise<AuthProvider> {
     const provider: AuthProvider = {
       createdAt: new Date(),
-      id: createId("auth"),
+      id: createUuidV7(),
       provider: input.provider,
       providerUserId: input.providerUserId,
       userId: input.userId,
@@ -785,7 +785,7 @@ class InMemoryEmailVerificationTokenRepository
       createdAt: new Date(),
       email: input.email,
       expiresAt: input.expiresAt,
-      id: createId("verify"),
+      id: createUuidV7(),
       kind: input.kind,
       pendingName: input.pendingName ?? null,
       pendingPasswordHash: input.pendingPasswordHash,
@@ -902,7 +902,7 @@ class InMemoryPasswordResetTokenRepository
       consumedAt: null,
       createdAt: new Date(),
       expiresAt: input.expiresAt,
-      id: createId("reset"),
+      id: createUuidV7(),
       tokenHash: input.tokenHash,
       userId: input.userId,
     };
@@ -964,7 +964,7 @@ class InMemoryAuthEmailDeliveryRepository
     const delivery: AuthEmailDelivery = {
       createdAt: input.createdAt ?? new Date(),
       email: input.email,
-      id: createId("auth_email"),
+      id: createUuidV7(),
       kind: input.kind,
     };
 

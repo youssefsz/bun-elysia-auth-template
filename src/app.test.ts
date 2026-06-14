@@ -74,6 +74,10 @@ const extractVerificationToken = (emailClient: FakeEmailClient, index = 0) => {
   return decodeURIComponent(match[1]);
 };
 
+const base64UrlTokenRegex = /^[A-Za-z0-9_-]{43}$/;
+const uuidV7Regex =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
 const expectVerificationEmailResponse = (
   body: unknown,
   minimumRetryAfterSeconds = 1,
@@ -303,6 +307,7 @@ describe("App", () => {
 
     expect(response.status).toBe(200);
     expect(body.user.email).toBe("owner@example.com");
+    expect(body.user.id).toMatch(uuidV7Regex);
     expect(body.session).toEqual({
       expiresInSeconds: config.sessionTtlSeconds,
       token: expect.any(String),
@@ -449,6 +454,7 @@ describe("App", () => {
     );
 
     const token = extractVerificationToken(emailClient);
+    expect(token).toMatch(base64UrlTokenRegex);
     const verifyResponse = await app.handle(
       new Request("http://localhost/api/v1/auth/verify-email/confirm", {
         method: "POST",
@@ -943,6 +949,7 @@ describe("App", () => {
     );
 
     const passwordResetToken = extractVerificationToken(emailClient, 1);
+    expect(passwordResetToken).toMatch(base64UrlTokenRegex);
     const confirmResponse = await app.handle(
       new Request("http://localhost/api/v1/auth/password-reset/confirm", {
         method: "POST",
@@ -1170,6 +1177,7 @@ describe("App", () => {
     expect(body.authenticated).toBe(true);
     expect(body.user.email).toBe(user.email);
     expect(body.user.id).toBe(user.id);
+    expect(body.user.id).toMatch(uuidV7Regex);
     expect(typeof body.user.createdAt).toBe("string");
     expect(typeof body.user.updatedAt).toBe("string");
   });

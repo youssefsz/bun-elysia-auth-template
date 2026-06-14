@@ -103,6 +103,19 @@ const normalizeOptionalName = (value: string | null | undefined) => {
 const toHex = (bytes: Uint8Array) =>
   [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
 
+const toBase64Url = (bytes: Uint8Array) =>
+  btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+
+const createRandomToken = () => {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+
+  return toBase64Url(bytes);
+};
+
 const hashToken = async (value: string) => {
   const digest = await crypto.subtle.digest(
     "SHA-256",
@@ -866,7 +879,7 @@ export class AuthService {
       );
     }
 
-    const rawToken = crypto.randomUUID();
+    const rawToken = createRandomToken();
     const tokenHash = await hashToken(rawToken);
 
     await this.deps.passwordResetTokenRepository.deletePendingByUserId(input.userId);
@@ -922,7 +935,7 @@ export class AuthService {
       );
     }
 
-    const rawToken = crypto.randomUUID();
+    const rawToken = createRandomToken();
     const tokenHash = await hashToken(rawToken);
 
     await this.deps.emailVerificationTokenRepository.deletePendingByEmail(

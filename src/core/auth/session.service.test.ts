@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { SessionService } from "./session.service";
 
+const userId = "019535d9-3df7-79fb-b466-fa907fa17f9e";
+
 describe("SessionService", () => {
   it("signs and verifies session tokens", async () => {
     const service = new SessionService({
@@ -38,7 +40,7 @@ describe("SessionService", () => {
       createdAt: new Date(),
       email: "user@example.com",
       emailVerified: true,
-      id: "user_123",
+      id: userId,
       name: "User",
       sessionVersion: 1,
       updatedAt: new Date(),
@@ -46,7 +48,7 @@ describe("SessionService", () => {
     const payload = await service.verify(token);
 
     expect(payload.email).toBe("user@example.com");
-    expect(payload.userId).toBe("user_123");
+    expect(payload.userId).toBe(userId);
     expect(payload.sessionVersion).toBe(1);
     expect(payload.issuedAt).toBeInstanceOf(Date);
     expect(payload.expiresAt).toBeInstanceOf(Date);

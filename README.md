@@ -7,7 +7,7 @@
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Drizzle ORM](https://img.shields.io/badge/orm-Drizzle%20ORM-C5F74F?logo=drizzle&logoColor=black)](https://orm.drizzle.team/)
 
-Production-ready authentication and account backend template built with Bun and Elysia. Includes local email and password auth, Google sign-in, Apple sign-in, JWT-backed sessions for cookies and bearer tokens, email verification, password reset flows, rate limiting, and PostgreSQL persistence with Drizzle ORM.
+Production-ready authentication and account backend template built with Bun and Elysia. Includes local email and password auth, Google sign-in, Apple sign-in, JWT-backed sessions for cookies and bearer tokens, email verification, password reset flows, rate limiting, and PostgreSQL persistence with Drizzle ORM. The repository also includes a minimal static frontend for login and account dashboard testing.
 
 ## Features
 
@@ -88,6 +88,18 @@ bun run dev
 
 The API runs on `http://localhost:3000` by default.
 
+### Run the Static Frontend
+
+In a second terminal:
+
+```bash
+bun run frontend
+```
+
+The frontend runs on `http://localhost:5173` and expects the API base URL `http://localhost:3000/api/v1` by default. Keep `CORS_ORIGINS=http://localhost:5173` in your environment when using it from the browser.
+
+The static client supports local email login, local signup, account dashboard actions, and Google sign-in. Google sign-in uses the included web client ID by default; set the same value in `GOOGLE_CLIENT_IDS` so the API accepts the returned ID token.
+
 ## Available Scripts
 
 | Command | Description |
@@ -136,6 +148,11 @@ src/
   schemas/      Request validation schemas
   services/     Business logic
   utils/        Shared utilities
+frontend/
+  index.html    Static login and dashboard UI
+  styles.css    Minimal responsive styling
+  app.js        Browser-side API client
+  server.js     Local static file server
 ```
 
 ## Authentication Notes

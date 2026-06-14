@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 export const passwordResetTokensTable = pgTable(
@@ -9,9 +9,9 @@ export const passwordResetTokensTable = pgTable(
       .defaultNow()
       .notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    id: text("id").primaryKey(),
+    id: uuid("id").primaryKey(),
     tokenHash: text("token_hash").notNull(),
-    userId: text("user_id")
+    userId: uuid("user_id")
       .notNull()
       .references(() => usersTable.id, {
         onDelete: "cascade",
